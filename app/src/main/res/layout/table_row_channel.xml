@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TableRow xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="4dp">
+
+    <TextView
+        android:id="@+id/tvChannelNo"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:textColor="#333333" />
+
+    <TextView
+        android:id="@+id/tvH2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:text="-"
+        android:textColor="#FF6200EE" />
+
+    <TextView
+        android:id="@+id/tvCH4"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:text="-"
+        android:textColor="#FF6200EE" />
+
+    <TextView
+        android:id="@+id/tvCO"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:text="-"
+        android:textColor="#FF6200EE" />
+
+    <TextView
+        android:id="@+id/tvH2S"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:text="-"
+        android:textColor="#FF6200EE" />
+
+    <TextView
+        android:id="@+id/tvCO2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:text="-"
+        android:textColor="#FF6200EE" />
+    <!-- 新增列：CH4+H2 -->
+    <TextView
+        android:id="@+id/tvCH4PlusH2"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:text="-"
+        android:textColor="#FF6200EE" />
+
+    <TextView
+        android:id="@+id/tvCorrected"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:text="-"
+        android:textColor="#FF6200EE" />
+
+    <TextView
+        android:id="@+id/tvStatus"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:textSize="14sp"
+        android:gravity="center"
+        android:text="-"
+        android:textColor="#FF9800" />
+
+</TableRow>

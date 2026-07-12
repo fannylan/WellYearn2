@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- USB通信权限 -->
+    <uses-feature
+        android:name="android.hardware.usb.host"
+        android:required="true" /> <!-- 开机自启动权限 -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" /> <!-- 系统窗口权限（部分平板需要） -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /> <!-- 相机权限 -->
+
+    <!-- AndroidManifest.xml -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Android 11 需要声明相机特性 -->
+    <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.WellYearn">
+        <activity
+            android:name=".PhysicalExamResultActivity"
+            android:exported="false" />
+        <activity
+            android:name=".PhysicalExamActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ModeSelectActivity"
+            android:exported="false" />
+        <activity
+            android:name=".Test3Activity"
+            android:exported="false" />
+        <activity
+            android:name=".Test2Activity"
+            android:exported="false" />
+        <activity
+            android:name=".Test1Activity"
+            android:exported="false" />
+        <activity
+            android:name=".HelpOperationActivity"
+            android:exported="false" />
+        <activity
+            android:name=".ReportSearchActivity"
+            android:exported="false" />
+        <activity
+            android:name=".DetectAnalysisActivity"
+            android:exported="false" /> <!-- 主Activity - 配置为启动器主屏幕 -->
+        <activity
+            android:name=".MainActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:launchMode="singleInstance">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- USB设备插入时的自动启动 -->
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/device_filter" />
+        </activity> <!-- 开机广播接收器 -->
+        <receiver
+            android:name=".BootReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+            </intent-filter>
+        </receiver>
+
+    </application>
+    <queries>
+        <intent>
+            <action android:name="com.google.zxing.client.android.SCAN" />
+        </intent>
+    </queries>
+</manifest>

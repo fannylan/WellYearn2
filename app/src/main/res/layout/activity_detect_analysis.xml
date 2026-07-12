@@ -1,0 +1,203 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#FFFFFF"
+    tools:context=".DetectAnalysisActivity">
+    <!-- 上层：扫码输入框 + 扫码按钮，权重改为1 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <EditText
+            android:id="@+id/etScanResult"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:hint="扫码获取患者信息"
+            android:textSize="16sp"
+            android:padding="12dp"
+            android:background="@android:drawable/editbox_background" />
+
+        <Button
+            android:id="@+id/btnScan"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="扫码"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <!-- 中间层：病人信息（左） + 检测操作（右），标签与内容水平布局 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="5"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <!-- 左侧：病人信息（移除了当前日期和申请时间） -->
+        <ScrollView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="标本编号：" />
+                    <TextView android:id="@+id/tvSpecimenNo" style="@style/InfoValueRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="患者类型：" />
+                    <Spinner
+                        android:id="@+id/spPatientType"
+                        style="@style/InfoSpinnerRight"
+                        android:entries="@array/patient_type_array" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="患者姓名：" />
+                    <TextView android:id="@+id/tvPatientName" style="@style/InfoValueRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="患者性别：" />
+                    <TextView android:id="@+id/tvPatientGender" style="@style/InfoValueRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="患者年龄：" />
+                    <TextView android:id="@+id/tvPatientAge" style="@style/InfoValueRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="患者号：" />
+                    <TextView android:id="@+id/tvPatientNo" style="@style/InfoValueRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="联系电话：" />
+                    <TextView android:id="@+id/tvPhone" style="@style/InfoValueRight" />
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- 右侧：检测操作（新增当前日期和申请时间） -->
+        <ScrollView
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- 当前日期放在检测类型上方 -->
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="当前日期：" />
+                    <TextView android:id="@+id/tvCurrentDate" style="@style/InfoValueRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="检测类型：" />
+                    <Spinner
+                        android:id="@+id/spTestType"
+                        style="@style/InfoSpinnerRight"
+                        android:entries="@array/test_type_array" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="底物选择：" />
+                    <Spinner
+                        android:id="@+id/spSubstrate"
+                        style="@style/InfoSpinnerRight"
+                        android:entries="@array/substrate_array" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="申请医生：" />
+                    <EditText android:id="@+id/etApplyDoctor" style="@style/InfoEditRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="申请科室：" />
+                    <EditText android:id="@+id/etApplyDept" style="@style/InfoEditRight" />
+                </LinearLayout>
+
+                <!-- 申请时间放在申请科室下方 -->
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="申请时间：" />
+                    <TextView android:id="@+id/tvApplyTime" style="@style/InfoValueRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="检测医生：" />
+                    <EditText android:id="@+id/etTestDoctor" style="@style/InfoEditRight" />
+                </LinearLayout>
+
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="备注：" />
+                    <EditText android:id="@+id/etRemarks" style="@style/InfoEditRight" />
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+    </LinearLayout>
+
+    <!-- 下层：返回、测试1、测试2 按钮，权重保持1 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="16dp">
+
+        <Button
+            android:id="@+id/btnBack"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="返回"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnTest1"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="CH4+H2"
+            android:layout_marginEnd="8dp" />
+
+        <Button
+            android:id="@+id/btnTest2"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="红细胞寿命" />
+        <Button
+            android:id="@+id/btnTest3"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="8dp"
+            android:text="NO分析" />
+    </LinearLayout>
+
+</LinearLayout>

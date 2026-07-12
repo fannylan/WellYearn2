@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- STM32通常使用CDC ACM类，VID/PID可根据实际STM32配置调整 -->
+    <usb-device class="2" subclass="2" protocol="1" />
+    <!-- 或通过vendor-id和product-id精确匹配 -->
+    <!-- <usb-device vendor-id="1155" product-id="22336" /> -->
+</resources>

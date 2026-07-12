@@ -1,0 +1,18 @@
+// 项目根目录的 build.gradle
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+        maven { url 'https://jitpack.io' }   // 用于 usb-serial-for-android
+    }
+    dependencies {
+        // Android Gradle 插件版本（与 app/build.gradle 中的 plugins 配合使用）
+        classpath 'com.android.tools.build:gradle:9.1.0'
+    }
+}
+
+// 注意：此处删除了 allprojects 块，仓库配置已迁移到 settings.gradle
+
+task clean(type: Delete) {
+    delete rootProject.buildDir
+}

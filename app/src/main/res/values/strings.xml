@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">WellYearn</string>
+
+    <!-- 患者类型 -->
+    <string-array name="patient_type_array">
+        <item>门诊</item>
+        <item>急诊</item>
+        <item>住院</item>
+        <item>体检</item>
+    </string-array>
+
+    <!-- 检测类型 -->
+    <string-array name="test_type_array">
+        <item>标准检测</item>
+        <item>小肠检测</item>
+        <item>乳糖不耐受检测</item>
+        <item>口盲时间</item>
+        <item>胰腺外分泌功能检测</item>
+    </string-array>
+
+    <!-- 底物选择 -->
+    <string-array name="substrate_array">
+        <item>乳果糖10g</item>
+        <item>葡萄糖75g</item>
+        <item>乳糖25g</item>
+        <item>果糖25g</item>
+        <item>直链淀粉100g</item>
+    </string-array>
+    <string-array name="gender_array">
+        <item>男</item>
+        <item>女</item>
+    </string-array>
+</resources>
