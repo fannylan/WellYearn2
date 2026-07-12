@@ -1,24 +1,21 @@
 <resources>
     <string name="app_name">WellYearn</string>
 
-    <!-- 患者类型 -->
+    <!-- 患者类型（保持不变） -->
     <string-array name="patient_type_array">
         <item>门诊</item>
         <item>急诊</item>
         <item>住院</item>
-        <item>体检</item>
     </string-array>
 
-    <!-- 检测类型 -->
+    <!-- 检测类型（修改为三个新选项） -->
     <string-array name="test_type_array">
-        <item>标准检测</item>
-        <item>小肠检测</item>
-        <item>乳糖不耐受检测</item>
-        <item>口盲时间</item>
-        <item>胰腺外分泌功能检测</item>
+        <item>胃肠道疾病检测</item>
+        <item>红细胞寿命检测</item>
+        <item>呼吸道疾病检测</item>
     </string-array>
 
-    <!-- 底物选择 -->
+    <!-- 底物选择已删除，数组可保留或移除，此处保留但不使用 -->
     <string-array name="substrate_array">
         <item>乳果糖10g</item>
         <item>葡萄糖75g</item>

@@ -7,7 +7,6 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -35,20 +34,16 @@ public class DetectAnalysisActivity extends AppCompatActivity {
     private static final int CAMERA_PERMISSION_REQUEST = 100;
 
     private EditText etScanResult;
-    private Button btnScan, btnBack, btnTest1, btnTest2,btnTest3;
+    private Button btnScan, btnBack, btnGI, btnRBC, btnResp;
 
-    // 左侧控件
-    private TextView tvSpecimenNo, tvPatientName, tvPatientGender, tvPatientAge, tvPatientNo, tvPhone;
-    private Spinner spPatientType;
-
-    // 右侧控件
+    private EditText etSpecimenNo, etPatientType, etPatientName, etPatientGender, etPatientAge, etPhone;
     private TextView tvCurrentDate, tvApplyTime;
-    private Spinner spTestType, spSubstrate;
-    private EditText etApplyDoctor, etApplyDept, etTestDoctor, etRemarks;
+    private EditText etApplyDoctor, etApplyDept;
 
     private AppDatabase db;
     private UsbSerialHelper usbHelper;
     private JSONObject currentPatientJson;
+    private boolean isScanned = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -60,44 +55,37 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         initDatabase();
         initUsbSerial();
 
-        // 显示当前日期
         SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.CHINA);
         tvCurrentDate.setText(sdf.format(new Date()));
+        tvApplyTime.setText(sdf.format(new Date()));
     }
 
     private void initViews() {
         etScanResult = findViewById(R.id.etScanResult);
         btnScan = findViewById(R.id.btnScan);
         btnBack = findViewById(R.id.btnBack);
-        btnTest1 = findViewById(R.id.btnTest1);
-        btnTest2 = findViewById(R.id.btnTest2);
-        btnTest3 = findViewById(R.id.btnTest3);
+        btnGI = findViewById(R.id.btnGI);
+        btnRBC = findViewById(R.id.btnRBC);
+        btnResp = findViewById(R.id.btnResp);
 
+        etSpecimenNo = findViewById(R.id.etSpecimenNo);
+        etPatientType = findViewById(R.id.etPatientType);
+        etPatientName = findViewById(R.id.etPatientName);
+        etPatientGender = findViewById(R.id.etPatientGender);
+        etPatientAge = findViewById(R.id.etPatientAge);
+        etPhone = findViewById(R.id.etPhone);
 
-        // 左侧
-        tvSpecimenNo = findViewById(R.id.tvSpecimenNo);
-        tvPatientName = findViewById(R.id.tvPatientName);
-        tvPatientGender = findViewById(R.id.tvPatientGender);
-        tvPatientAge = findViewById(R.id.tvPatientAge);
-        tvPatientNo = findViewById(R.id.tvPatientNo);
-        tvPhone = findViewById(R.id.tvPhone);
-        spPatientType = findViewById(R.id.spPatientType);
-
-        // 右侧
         tvCurrentDate = findViewById(R.id.tvCurrentDate);
         tvApplyTime = findViewById(R.id.tvApplyTime);
-        spTestType = findViewById(R.id.spTestType);
-        spSubstrate = findViewById(R.id.spSubstrate);
         etApplyDoctor = findViewById(R.id.etApplyDoctor);
         etApplyDept = findViewById(R.id.etApplyDept);
-        etTestDoctor = findViewById(R.id.etTestDoctor);
-        etRemarks = findViewById(R.id.etRemarks);
 
         btnScan.setOnClickListener(v -> startScan());
         btnBack.setOnClickListener(v -> finish());
-        btnTest1.setOnClickListener(v -> onTestClick("测试1"));
-        btnTest2.setOnClickListener(v -> onTestClick("测试2"));
-        btnTest3.setOnClickListener(v -> onTestClick("测试3"));
+
+        btnGI.setOnClickListener(v -> onTestClick("胃肠道疾病检测", "7E 20 00 00 00 20 7E", Test1Activity.class));
+        btnRBC.setOnClickListener(v -> onTestClick("红细胞寿命检测", "7E 30 00 00 00 30 7E", Test2Activity.class));
+        btnResp.setOnClickListener(v -> onTestClick("呼吸道疾病检测", "7E 40 00 00 00 40 7E", Test3Activity.class));
     }
 
     private void initDatabase() {
@@ -119,9 +107,17 @@ public class DetectAnalysisActivity extends AppCompatActivity {
     }
 
     private void startScan() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this,
+                    new String[]{Manifest.permission.CAMERA},
+                    CAMERA_PERMISSION_REQUEST);
+            return;
+        }
+        @SuppressWarnings("deprecation")
         IntentIntegrator integrator = new IntentIntegrator(this);
         integrator.setDesiredBarcodeFormats(IntentIntegrator.ALL_CODE_TYPES);
-        integrator.setPrompt("");  // 无提示文字
+        integrator.setPrompt("");
         integrator.setCameraId(0);
         integrator.setBeepEnabled(true);
         integrator.setBarcodeImageEnabled(false);
@@ -135,8 +131,9 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         if (result != null) {
             if (result.getContents() != null) {
                 String scanText = result.getContents();
-                etScanResult.setText(scanText);  // 覆盖原有结果
-                parsePatientInfo(scanText);
+                etScanResult.setText(scanText);
+                isScanned = true;
+                parseAndFillPatientInfo(scanText);
             } else {
                 Toast.makeText(this, "扫码取消", Toast.LENGTH_SHORT).show();
             }
@@ -149,100 +146,101 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == CAMERA_PERMISSION_REQUEST) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                // 权限已授予，可扫码
+                startScan();
             } else {
                 Toast.makeText(this, "相机权限被拒绝，无法扫码", Toast.LENGTH_SHORT).show();
             }
         }
     }
 
-    private void parsePatientInfo(String jsonStr) {
+    private void parseAndFillPatientInfo(String jsonStr) {
         try {
             currentPatientJson = new JSONObject(jsonStr);
-            tvSpecimenNo.setText(currentPatientJson.optString("specimenNo", ""));
-            tvPatientName.setText(currentPatientJson.optString("name", ""));
-            tvPatientGender.setText(currentPatientJson.optString("gender", ""));
-            tvPatientAge.setText(currentPatientJson.optString("age", ""));
-            tvPatientNo.setText(currentPatientJson.optString("patientNo", ""));
-            tvPhone.setText(currentPatientJson.optString("phone", ""));
-            tvApplyTime.setText(currentPatientJson.optString("applyTime", ""));
-            // 患者类型通过 Spinner 手动选择，不从二维码中读取
+            etSpecimenNo.setText(currentPatientJson.optString("specimenNo", ""));
+            etPatientType.setText(currentPatientJson.optString("patientType", ""));
+            etPatientName.setText(currentPatientJson.optString("name", ""));
+            etPatientGender.setText(currentPatientJson.optString("gender", ""));
+            etPatientAge.setText(currentPatientJson.optString("age", ""));
+            etPhone.setText(currentPatientJson.optString("phone", ""));
+            etApplyDoctor.setText(currentPatientJson.optString("applyDoctor", ""));
+            etApplyDept.setText(currentPatientJson.optString("applyDept", ""));
+            String applyTime = currentPatientJson.optString("applyTime", "");
+            if (!applyTime.isEmpty()) {
+                tvApplyTime.setText(applyTime);
+            }
         } catch (JSONException e) {
             e.printStackTrace();
-            // 解析失败时，使用模拟患者信息
-            useMockPatientInfo();
-            Toast.makeText(this, "二维码格式错误，已使用模拟患者信息", Toast.LENGTH_LONG).show();
+            Toast.makeText(this, "二维码格式错误，请手动输入", Toast.LENGTH_SHORT).show();
         }
     }
 
-    /**
-     * 填充模拟患者数据（用于调试或非标准二维码）
-     */
-    private void useMockPatientInfo() {
-        // 构造一个模拟的 JSONObject（可选）
-        try {
-            currentPatientJson = new JSONObject();
-            currentPatientJson.put("specimenNo", "MOCK001");
-            currentPatientJson.put("name", "模拟患者");
-            currentPatientJson.put("gender", "男");
-            currentPatientJson.put("age", "45");
-            currentPatientJson.put("patientNo", "P99999");
-            currentPatientJson.put("phone", "13800000000");
-            currentPatientJson.put("applyTime", "2025-04-20 10:30:00");
-        } catch (JSONException ex) {
-            currentPatientJson = null;
-        }
-
-        // 同时更新界面上的 TextView
-        tvSpecimenNo.setText("MOCK001");
-        tvPatientName.setText("模拟患者");
-        tvPatientGender.setText("男");
-        tvPatientAge.setText("45");
-        tvPatientNo.setText("P99999");
-        tvPhone.setText("13800000000");
-        tvApplyTime.setText("2025-04-20 10:30:00");
+    private void fillMockPatientInfo(String input) {
+        etSpecimenNo.setText(input);
+        etPatientType.setText("门诊");
+        etPatientName.setText("模拟患者");
+        etPatientGender.setText("男");
+        etPatientAge.setText("30");
+        etPhone.setText("13800138000");
+        etApplyDoctor.setText("张医生");
+        etApplyDept.setText("内科");
+        isScanned = false;
+        Toast.makeText(this, "已生成模拟患者信息", Toast.LENGTH_SHORT).show();
     }
 
+    private void onTestClick(String testName, String hexCmd, Class<?> targetClass) {
+        if (!isScanned && TextUtils.isEmpty(etScanResult.getText().toString())) {
+            Toast.makeText(this, "请扫码或输入条形码号", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!isScanned && !TextUtils.isEmpty(etScanResult.getText().toString())) {
+            fillMockPatientInfo(etScanResult.getText().toString());
+        }
 
-
-    private void onTestClick(String testCommand) {
-        if (TextUtils.isEmpty(etScanResult.getText().toString())) {
-            Toast.makeText(this, "请先扫描患者二维码", Toast.LENGTH_SHORT).show();
+        if (TextUtils.isEmpty(etSpecimenNo.getText())) {
+            Toast.makeText(this, "请输入条形码号", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (TextUtils.isEmpty(etPatientName.getText())) {
+            Toast.makeText(this, "请输入患者姓名", Toast.LENGTH_SHORT).show();
             return;
         }
 
-        // 确保有患者数据（如果 currentPatientJson 为空，尝试解析或模拟）
-        if (currentPatientJson == null) {
-            parsePatientInfo(etScanResult.getText().toString());
+        final String name = etPatientName.getText().toString();
+        final String gender = etPatientGender.getText().toString();
+        final String patientType = etPatientType.getText().toString();
+        final int age;
+        try {
+            age = Integer.parseInt(etPatientAge.getText().toString());
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "年龄格式错误，请填写数字", Toast.LENGTH_SHORT).show();
+            return;
         }
+        final String phone = etPhone.getText().toString();
+        final String applyDoctor = etApplyDoctor.getText().toString();
+        final String applyDept = etApplyDept.getText().toString();
+        final String specimenNo = etSpecimenNo.getText().toString();
 
-        // 在后台线程执行数据库操作
         new Thread(() -> {
-            // 保存患者信息
+            // 保存患者
             Patient patient = new Patient();
-            patient.setName(tvPatientName.getText().toString());
-            patient.setGender(tvPatientGender.getText().toString());
-            patient.setPatientType(spPatientType.getSelectedItem().toString());
-            try {
-                int age = Integer.parseInt(tvPatientAge.getText().toString());
-                patient.setAge(age);
-            } catch (NumberFormatException e) {
-                patient.setAge(0);
-            }
-            patient.setPhone(tvPhone.getText().toString());
+            patient.setName(name);
+            patient.setGender(gender);
+            patient.setPatientType(patientType);
+            patient.setAge(age);
+            patient.setPhone(phone);
             patient.setIdCard("");
             patient.setCreatedTime(System.currentTimeMillis());
             patient.setUpdatedTime(System.currentTimeMillis());
 
             long patientId = db.patientDao().insert(patient);
 
-            // 保存检测报告
+            // 保存报告
             TestReport report = new TestReport();
             report.setPatientId(patientId);
-            report.setTestType(spTestType.getSelectedItem().toString());
-            report.setTestData(spSubstrate.getSelectedItem().toString());
-            report.setDoctorName(etTestDoctor.getText().toString());
-            report.setRemarks(etRemarks.getText().toString());
+            report.setTestType(testName);
+            report.setTestData("");
+            report.setDoctorName(applyDoctor);
+            report.setRemarks(applyDept);  // 申请科室存入remarks
             report.setTestDate(System.currentTimeMillis());
             report.setReportNumber("RP" + System.currentTimeMillis());
             report.setTestResult("");
@@ -250,46 +248,41 @@ public class DetectAnalysisActivity extends AppCompatActivity {
 
             long reportId = db.testReportDao().insert(report);
 
-            // 回到主线程处理 USB 通信和页面跳转
+            // 发送USB指令
+            if (usbHelper != null && usbHelper.isConnected()) {
+                byte[] cmd = hexStringToByteArray(hexCmd);
+                usbHelper.sendBytes(cmd);
+            }
+
             runOnUiThread(() -> {
-                // 发送指令到单片机
                 if (usbHelper != null && usbHelper.isConnected()) {
-                    usbHelper.sendData(testCommand);
-                    Toast.makeText(DetectAnalysisActivity.this, "已向单片机发送指令：" + testCommand, Toast.LENGTH_SHORT).show();
+                    Toast.makeText(DetectAnalysisActivity.this, "已发送指令：" + hexCmd, Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(DetectAnalysisActivity.this, "USB未连接，无法发送指令", Toast.LENGTH_SHORT).show();
                 }
 
-                // 跳转到对应的测试页面
-                Class<?> targetClass;
-                switch (testCommand) {
-                    case "测试1":
-                        targetClass = Test1Activity.class;
-                        break;
-                    case "测试2":
-                        targetClass = Test2Activity.class;
-                        break;
-                    case "测试3":
-                        targetClass = Test3Activity.class;
-                        break;
-                    default:
-                        targetClass = Test1Activity.class;
-                }
                 Intent intent = new Intent(DetectAnalysisActivity.this, targetClass);
                 intent.putExtra("patientId", patientId);
                 intent.putExtra("reportId", reportId);
-                intent.putExtra("patientName", tvPatientName.getText().toString());
-                intent.putExtra("specimenNo", tvSpecimenNo.getText().toString());
+                intent.putExtra("patientName", name);
+                intent.putExtra("specimenNo", specimenNo);
                 startActivity(intent);
             });
         }).start();
     }
 
+    private byte[] hexStringToByteArray(String hex) {
+        String[] parts = hex.split(" ");
+        byte[] bytes = new byte[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            bytes[i] = (byte) Integer.parseInt(parts[i], 16);
+        }
+        return bytes;
+    }
+
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (usbHelper != null) {
-            usbHelper.disconnect();
-        }
+        if (usbHelper != null) usbHelper.disconnect();
     }
 }

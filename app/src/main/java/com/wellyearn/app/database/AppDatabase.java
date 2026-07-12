@@ -13,7 +13,7 @@ import com.wellyearn.app.database.entity.TestReport;
 
 @Database(
         entities = {Patient.class, TestReport.class, Admin.class},
-        version = 2,          // 保持版本2
+        version = 2,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -32,7 +32,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     context.getApplicationContext(),
                                     AppDatabase.class,
                                     "wellyearn_database")
-                            .fallbackToDestructiveMigration()   // 允许破坏性迁移，解决版本升级问题
+                            .fallbackToDestructiveMigration()
                             .build();
                 }
             }

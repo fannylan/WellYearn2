@@ -24,7 +24,6 @@ public class Patient {
     @ColumnInfo(name = "id_card")
     public String idCard;
 
-    // 新增：患者类型（门诊、急诊、住院、体检）
     @ColumnInfo(name = "patient_type")
     public String patientType;
 
@@ -34,7 +33,6 @@ public class Patient {
     @ColumnInfo(name = "updated_time")
     public long updatedTime;
 
-    // 构造函数
     public Patient() {}
 
     // Getters and Setters

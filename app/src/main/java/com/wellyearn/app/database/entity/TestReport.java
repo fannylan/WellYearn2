@@ -6,16 +6,12 @@ import androidx.room.ForeignKey;
 import androidx.room.Index;
 import androidx.room.PrimaryKey;
 
-@Entity(
-        tableName = "test_reports",
-        foreignKeys = @ForeignKey(
-                entity = Patient.class,
+@Entity(tableName = "test_reports",
+        foreignKeys = @ForeignKey(entity = Patient.class,
                 parentColumns = "id",
                 childColumns = "patient_id",
-                onDelete = ForeignKey.CASCADE
-        ),
-        indices = {@Index("patient_id")}
-)
+                onDelete = ForeignKey.CASCADE),
+        indices = {@Index("patient_id")})
 public class TestReport {
     @PrimaryKey(autoGenerate = true)
     public long id;
@@ -27,22 +23,22 @@ public class TestReport {
     public String reportNumber;
 
     @ColumnInfo(name = "test_type")
-    public String testType;
+    public String testType;          // 存储检测名称（胃肠道/红细胞/呼吸道）
 
     @ColumnInfo(name = "test_date")
     public long testDate;
 
     @ColumnInfo(name = "test_result")
-    public String testResult;
+    public String testResult;        // 存储结果数据（JSON等）
 
     @ColumnInfo(name = "test_data")
-    public String testData;  // 存储检测数据的JSON字符串
+    public String testData;          // 额外数据，可留空
 
     @ColumnInfo(name = "remarks")
-    public String remarks;
+    public String remarks;           // 存储申请科室
 
     @ColumnInfo(name = "doctor_name")
-    public String doctorName;
+    public String doctorName;        // 存储申请医生
 
     @ColumnInfo(name = "created_time")
     public long createdTime;

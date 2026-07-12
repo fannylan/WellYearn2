@@ -24,7 +24,6 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.WellYearn">
-
         <activity
             android:name=".PhysicalExamResultActivity"
             android:exported="false" />
