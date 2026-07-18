@@ -84,6 +84,17 @@
                 android:layout_weight="2"
                 android:layout_marginBottom="8dp" />
 
+            <TextView
+                android:id="@+id/textReceivedData"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#E8E8E8"
+                android:padding="8dp"
+                android:textSize="12sp"
+                android:textColor="#333333"
+                android:layout_marginBottom="8dp"
+                android:text="接收数据：--" />
+
             <!-- 结果解读文本框 -->
             <TextView
                 android:id="@+id/textResultInterpretation"

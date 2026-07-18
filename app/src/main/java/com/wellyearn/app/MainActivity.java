@@ -21,7 +21,7 @@ import java.io.ByteArrayOutputStream;
 
 public class MainActivity extends AppCompatActivity {
 
-    private static final int POLL_TIMEOUT_MS = 10000;   // 轮询超时5秒
+    private static final int POLL_TIMEOUT_MS = 5000;
     private static final int MAX_CONNECT_RETRY = 5;
 
     private ProgressBar bootProgressBar;
@@ -39,7 +39,7 @@ public class MainActivity extends AppCompatActivity {
 
         initViews();
         initUsbSerial();
-        startBootSequence();   // 初始灰色进度条
+        startBootSequence();
         initDatabase();
     }
 
@@ -49,7 +49,7 @@ public class MainActivity extends AppCompatActivity {
         cardReport = findViewById(R.id.cardReport);
         cardHelp = findViewById(R.id.cardHelp);
 
-        // 直接启用所有功能按钮，无需等待设备就绪
+        // 直接启用所有功能按钮
         cardDetect.setEnabled(true);
         cardReport.setEnabled(true);
         cardHelp.setEnabled(true);
@@ -57,7 +57,6 @@ public class MainActivity extends AppCompatActivity {
         cardReport.setAlpha(1.0f);
         cardHelp.setAlpha(1.0f);
 
-        // 点击事件
         cardDetect.setOnClickListener(v -> {
             Intent intent = new Intent(MainActivity.this, ModeSelectActivity.class);
             startActivity(intent);
@@ -76,19 +75,19 @@ public class MainActivity extends AppCompatActivity {
         mainHandler = new Handler(Looper.getMainLooper());
         usbHelper = new UsbSerialHelper(this);
 
-        // 设置字节数据监听（用于解析协议帧）
-        usbHelper.setByteDataListener(data -> parseDeviceStatus(data));
+        // 设置字节数据监听（用于协议解析和显示接收数据）
+        usbHelper.setByteDataListener(data -> {
+            // 显示接收到的原始数据（十六进制）
+            String hexStr = bytesToHex(data);
+            runOnUiThread(() -> Toast.makeText(MainActivity.this, "接收: " + hexStr, Toast.LENGTH_SHORT).show());
+            // 解析状态
+            parseDeviceStatus(data);
+        });
 
-        // 尝试连接USB设备
         usbHelper.scanAndConnect();
-
-        // 延迟检测连接状态，重试机制
         startConnectionCheck(0);
     }
 
-    /**
-     * 重试检测USB连接，最多尝试 MAX_CONNECT_RETRY 次
-     */
     private void startConnectionCheck(int attempt) {
         if (attempt >= MAX_CONNECT_RETRY) {
             Toast.makeText(this, "USB设备未连接，请检查", Toast.LENGTH_SHORT).show();
@@ -96,27 +95,20 @@ public class MainActivity extends AppCompatActivity {
         }
         mainHandler.postDelayed(() -> {
             if (usbHelper.isConnected()) {
-                // 连接成功，发送轮询命令
                 sendPollCommand();
             } else {
-                // 未连接，继续重试
                 startConnectionCheck(attempt + 1);
             }
-        }, 1000 * (attempt + 1));  // 递增延迟
+        }, 1000 * (attempt + 1));
     }
 
     /**
      * 构造协议帧（包含转义）
-     * @param commandId 2字节命令ID（大端）
-     * @param body      消息体（可为null）
-     * @return 完整帧（含起始结束符0x7E）
      */
     private byte[] buildFrame(byte[] commandId, byte[] body) {
-        // 消息头：ID(2) + 属性(2) + 可选分包项(0)
         int bodyLen = (body == null) ? 0 : body.length;
         byte[] header = new byte[4 + bodyLen];
         System.arraycopy(commandId, 0, header, 0, 2);
-        // 属性：低10位为消息体长度
         int attr = bodyLen & 0x03FF;
         header[2] = (byte) ((attr >> 8) & 0xFF);
         header[3] = (byte) (attr & 0xFF);
@@ -124,20 +116,15 @@ public class MainActivity extends AppCompatActivity {
             System.arraycopy(body, 0, header, 4, bodyLen);
         }
 
-        // 校验：从header第0字节异或到最后1字节
         byte checksum = 0;
-        for (byte b : header) {
-            checksum ^= b;
-        }
+        for (byte b : header) checksum ^= b;
 
-        // 构造待转义数据：header + checksum
         byte[] dataToEscape = new byte[header.length + 1];
         System.arraycopy(header, 0, dataToEscape, 0, header.length);
         dataToEscape[header.length] = checksum;
 
-        // 转义处理并添加起始/结束符
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        baos.write(0x7E); // 起始符
+        baos.write(0x7E);
         for (byte b : dataToEscape) {
             if (b == 0x7E) {
                 baos.write(0x7D);
@@ -149,12 +136,12 @@ public class MainActivity extends AppCompatActivity {
                 baos.write(b);
             }
         }
-        baos.write(0x7E); // 结束符
+        baos.write(0x7E);
         return baos.toByteArray();
     }
 
     /**
-     * 发送状态轮询命令 (消息ID 0x0A0A)
+     * 发送状态轮询命令 (0x0A0A)
      */
     private void sendPollCommand() {
         if (!usbHelper.isConnected()) {
@@ -162,9 +149,13 @@ public class MainActivity extends AppCompatActivity {
         }
         byte[] cmdId = {(byte) 0x0A, (byte) 0x0A};
         byte[] frame = buildFrame(cmdId, null);
+
+        // 显示发送内容
+        String sendHex = bytesToHex(frame);
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, "发送: " + sendHex, Toast.LENGTH_SHORT).show());
+
         usbHelper.sendBytes(frame);
 
-        // 设置超时计时器
         isPolling = true;
         if (pollTimeoutRunnable != null) {
             mainHandler.removeCallbacks(pollTimeoutRunnable);
@@ -182,28 +173,21 @@ public class MainActivity extends AppCompatActivity {
     }
 
     /**
-     * 解析设备状态回应
-     * @param data 原始字节数据（包含转义）
+     * 解析设备状态回应 (0x1A0A)
      */
     private void parseDeviceStatus(byte[] data) {
-        // 去转义，并提取完整帧
         byte[] raw = removeEscape(data);
         if (raw == null || raw.length < 8) return;
-
-        // 检查帧头尾
         if (raw[0] != 0x7E || raw[raw.length - 1] != 0x7E) return;
 
-        // 提取消息ID（第1、2字节，大端）
         int msgId = ((raw[1] & 0xFF) << 8) | (raw[2] & 0xFF);
-        if (msgId != 0x1A0A) return; // 不是状态回应
+        if (msgId != 0x1A0A) return;
 
-        // 提取状态：消息体第1字节（索引5，因为头4字节+属性2字节，但属性已占2字节，所以偏移4+1=5？需计算）
-        // 结构：起始符(1) + ID(2) + 属性(2) + 消息体(n) + 校验(1) + 结束符(1)
-        // 所以消息体从索引5开始（0-based），第一个字节就是状态
-        if (raw.length < 6) return;
+        // 显示接收到的完整帧（去除转义后）
+        String recvHex = bytesToHex(raw);
+        runOnUiThread(() -> Toast.makeText(MainActivity.this, "接收回应: " + recvHex, Toast.LENGTH_SHORT).show());
+
         int status = raw[5] & 0xFF;
-
-        // 取消超时
         isPolling = false;
         mainHandler.removeCallbacks(pollTimeoutRunnable);
 
@@ -214,9 +198,6 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    /**
-     * 去除转义字符
-     */
     private byte[] removeEscape(byte[] data) {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         for (int i = 0; i < data.length; i++) {
@@ -237,6 +218,14 @@ public class MainActivity extends AppCompatActivity {
         return baos.toByteArray();
     }
 
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString().trim();
+    }
+
     private String getStatusText(int status) {
         switch (status) {
             case 0: return "初始化中";
@@ -251,11 +240,11 @@ public class MainActivity extends AppCompatActivity {
     private void updateProgressColor(int status) {
         int color;
         switch (status) {
-            case 0: color = Color.parseColor("#9E9E9E"); break; // 灰色
-            case 1: color = Color.parseColor("#4CAF50"); break; // 绿色
-            case 2: color = Color.parseColor("#9C27B0"); break; // 紫色
-            case 3: color = Color.parseColor("#FFEB3B"); break; // 黄色
-            case 4: color = Color.parseColor("#F44336"); break; // 红色
+            case 0: color = Color.parseColor("#9E9E9E"); break;
+            case 1: color = Color.parseColor("#4CAF50"); break;
+            case 2: color = Color.parseColor("#9C27B0"); break;
+            case 3: color = Color.parseColor("#FFEB3B"); break;
+            case 4: color = Color.parseColor("#F44336"); break;
             default: color = Color.parseColor("#9E9E9E");
         }
         setProgressBarColor(color);
@@ -267,7 +256,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startBootSequence() {
-        // 初始灰色
         bootProgressBar.setProgress(100);
         bootProgressBar.getProgressDrawable().setColorFilter(
                 ContextCompat.getColor(this, android.R.color.darker_gray),

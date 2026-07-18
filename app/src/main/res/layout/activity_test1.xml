@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
@@ -8,6 +7,7 @@
     android:orientation="vertical"
     android:padding="16dp"
     tools:context=".Test1Activity">
+
     <!-- 顶层横向布局：时间、标本编号、患者姓名 -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -52,7 +52,7 @@
         android:orientation="horizontal"
         android:layout_marginBottom="16dp">
 
-        <!-- 左侧：八通道数据表格（垂直滚动） -->
+        <!-- 左侧：八通道数据表格 -->
         <ScrollView
             android:layout_width="0dp"
             android:layout_height="match_parent"
@@ -64,12 +64,10 @@
                 android:id="@+id/tableChannels"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:stretchColumns="1,2,3,4,5,6,7"
-                android:shrinkColumns="*" />
-
+                android:stretchColumns="1,2,3,4,5,6,7" />
         </ScrollView>
 
-        <!-- 右侧：图表 + 结果解读 -->
+        <!-- 右侧：图表 + 数据接收显示 + 结果解读 -->
         <LinearLayout
             android:layout_width="0dp"
             android:layout_height="match_parent"
@@ -85,6 +83,18 @@
                 android:layout_weight="2"
                 android:layout_marginBottom="8dp" />
 
+            <!-- 新增：实时接收数据显示 -->
+            <TextView
+                android:id="@+id/textReceivedData"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#E8E8E8"
+                android:padding="8dp"
+                android:textSize="12sp"
+                android:textColor="#333333"
+                android:layout_marginBottom="8dp"
+                android:text="接收数据：--" />
+
             <!-- 结果解读文本框 -->
             <TextView
                 android:id="@+id/textResultInterpretation"
@@ -98,7 +108,7 @@
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 底层横向布局：返回、检测完成标签、报告管理 -->
+    <!-- 底层横向布局 -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

@@ -266,6 +266,7 @@ public class DetectAnalysisActivity extends AppCompatActivity {
                 intent.putExtra("reportId", reportId);
                 intent.putExtra("patientName", name);
                 intent.putExtra("specimenNo", specimenNo);
+                intent.putExtra("patientGender", etPatientGender.getText().toString());
                 startActivity(intent);
             });
         }).start();

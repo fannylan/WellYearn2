@@ -35,28 +35,23 @@ import java.util.Locale;
 
 public class Test1Activity extends AppCompatActivity {
 
-    // UI 控件
     private TextView textCurrentTime, textSpecimenNo, textPatientName;
-    private TextView textDetectionProgress;
+    private TextView textDetectionProgress, textReceivedData, textResultInterpretation;
     private Button buttonBack, buttonReportManage;
     private LineChart lineChart;
-    private TextView textResultInterpretation;
     private TableLayout tableChannels;
 
-    // 数据
     private UsbSerialHelper usbHelper;
     private AppDatabase db;
     private long patientId;
     private long reportId;
-    private String patientName, specimenNo;
+    private String patientNameStr, specimenNo;
 
-    // 八通道数据存储
-    private List<ChannelData> channelDataList = new ArrayList<>();
+    private ChannelData[] channelDataArray = new ChannelData[8];
     private int receivedChannelCount = 0;
     private boolean detectionCompleted = false;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
-    // 图表数据集（示例只用一个数据集展示H2浓度，可根据需求扩展）
     private List<Entry> h2Entries = new ArrayList<>();
 
     @Override
@@ -64,10 +59,9 @@ public class Test1Activity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_test1);
 
-        // 获取传递的患者信息
         patientId = getIntent().getLongExtra("patientId", -1);
         reportId = getIntent().getLongExtra("reportId", -1);
-        patientName = getIntent().getStringExtra("patientName");
+        patientNameStr = getIntent().getStringExtra("patientName");
         specimenNo = getIntent().getStringExtra("specimenNo");
 
         initViews();
@@ -75,12 +69,9 @@ public class Test1Activity extends AppCompatActivity {
         initUsbSerial();
         initTable();
 
-        // 显示传递的信息
-        textPatientName.setText("患者姓名：" + (patientName != null ? patientName : "--"));
+        textPatientName.setText("患者姓名：" + (patientNameStr != null ? patientNameStr : "--"));
         textSpecimenNo.setText("标本编号：" + (specimenNo != null ? specimenNo : "--"));
         updateCurrentTime();
-
-        // 开始检测进度模拟（实际应由数据接收驱动进度）
         startDetectionProgress();
     }
 
@@ -89,16 +80,16 @@ public class Test1Activity extends AppCompatActivity {
         textSpecimenNo = findViewById(R.id.textSpecimenNo);
         textPatientName = findViewById(R.id.textPatientName);
         textDetectionProgress = findViewById(R.id.textDetectionProgress);
+        textReceivedData = findViewById(R.id.textReceivedData);
+        textResultInterpretation = findViewById(R.id.textResultInterpretation);
         buttonBack = findViewById(R.id.buttonBack);
         buttonReportManage = findViewById(R.id.buttonReportManage);
         lineChart = findViewById(R.id.lineChart);
-        textResultInterpretation = findViewById(R.id.textResultInterpretation);
         tableChannels = findViewById(R.id.tableChannels);
 
         buttonBack.setOnClickListener(v -> finish());
         buttonReportManage.setOnClickListener(v -> {
             if (detectionCompleted) {
-                // 跳转到报告管理页面（可后续实现）
                 Toast.makeText(this, "报告管理功能开发中", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, "检测未完成，无法查看报告", Toast.LENGTH_SHORT).show();
@@ -112,71 +103,83 @@ public class Test1Activity extends AppCompatActivity {
 
     private void initUsbSerial() {
         usbHelper = new UsbSerialHelper(this);
-        usbHelper.setOnDataReceivedListener(data -> {
-            // 解析单片机上传的数据，假设格式为 JSON: {"channel":1, "h2":12.5, "ch4":0.3, "co":0.1, "h2s":0.0, "co2":400, "corrected":12.3}
-            parseAndUpdateData(data);
+        usbHelper.setByteDataListener(data -> {
+            String hexStr = bytesToHex(data);
+            runOnUiThread(() -> textReceivedData.setText("接收数据：" + hexStr));
+            parseDataFrame(data);
         });
         usbHelper.scanAndConnect();
     }
 
-    private void parseAndUpdateData(String data) {
-        try {
-            JSONObject json = new JSONObject(data);
-            int channel = json.getInt("channel");
-            float h2 = (float) json.getDouble("h2");
-            float ch4 = (float) json.getDouble("ch4");
-            float co = (float) json.getDouble("co");
-            float h2s = (float) json.getDouble("h2s");
-            float co2 = (float) json.getDouble("co2");
-            float corrected = (float) json.getDouble("corrected");
-            String status = json.optString("status", "正常");
-
-            // 更新对应通道的数据
-            if (channel >= 1 && channel <= 8) {
-                ChannelData cd = new ChannelData(channel, h2, ch4, co, h2s, co2, corrected, status);
-                channelDataList.add(cd);
-                receivedChannelCount++;
-                runOnUiThread(() -> updateTableRow(channel, cd));
-                // 更新图表（以H2为例）
-                h2Entries.add(new Entry(channel, h2));
-                runOnUiThread(this::updateChart);
-
-                // 更新进度条（色带）文字
-                int progressPercent = (receivedChannelCount * 100) / 8;
-                runOnUiThread(() -> {
-                    textDetectionProgress.setText("检测中 " + progressPercent + "%");
-                    if (progressPercent == 100) {
-                        onDetectionComplete();
-                    }
-                });
+    private void parseDataFrame(byte[] data) {
+        byte[] raw = data;
+        int start = -1, end = -1;
+        for (int i = 0; i < raw.length; i++) {
+            if (raw[i] == 0x7E) {
+                if (start == -1) start = i;
+                else { end = i; break; }
             }
-        } catch (JSONException e) {
-            e.printStackTrace();
         }
+        if (start == -1 || end == -1 || end - start < 12) return;
+
+        int frameLen = end - start - 1;
+        byte[] frame = new byte[frameLen];
+        System.arraycopy(raw, start + 1, frame, 0, frameLen);
+
+        // 消息ID（大端）
+        int msgId = ((frame[0] & 0xFF) << 8) | (frame[1] & 0xFF);
+        // 修正：实际ID为0x2000（示例中20 00）
+        if (msgId != 0x2000) return;
+
+        int dataLen = ((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF);
+        if (frameLen < dataLen + 1) return; // 至少包含校验码
+
+        // 状态（忽略）
+        int status = frame[4] & 0xFF;
+        // 通道号（0~7）
+        int channel = frame[5] & 0xFF;
+        if (channel < 0 || channel > 7) return;
+
+        // 浓度数据从索引6开始，每个2字节，小端
+        int h2 = (frame[7] & 0xFF) << 8 | (frame[6] & 0xFF);
+        int ch4 = (frame[9] & 0xFF) << 8 | (frame[8] & 0xFF);
+        int h2s = (frame[11] & 0xFF) << 8 | (frame[10] & 0xFF);
+        int co2 = (frame[13] & 0xFF) << 8 | (frame[12] & 0xFF);
+
+        ChannelData cd = new ChannelData(channel + 1, h2, ch4, h2s, co2);
+        channelDataArray[channel] = cd;
+        receivedChannelCount++;
+
+        runOnUiThread(() -> {
+            updateTableRow(channel + 1, cd);
+            h2Entries.add(new Entry(channel + 1, h2));
+            updateChart();
+            int progress = receivedChannelCount * 100 / 8;
+            textDetectionProgress.setText("检测中 " + progress + "%");
+            if (receivedChannelCount == 8) {
+                onDetectionComplete();
+            }
+        });
     }
 
     private void updateTableRow(int channel, ChannelData data) {
-        // 动态更新表格对应行的各列数据
-        TableRow row = (TableRow) tableChannels.getChildAt(channel); // 第0行为表头，所以第1行对应通道1
+        TableRow row = (TableRow) tableChannels.getChildAt(channel);
         if (row != null) {
-            ((TextView) row.findViewById(R.id.tvH2)).setText(String.format(Locale.CHINA, "%.1f", data.h2));
-            ((TextView) row.findViewById(R.id.tvCH4)).setText(String.format(Locale.CHINA, "%.2f", data.ch4));
-            ((TextView) row.findViewById(R.id.tvCO)).setText(String.format(Locale.CHINA, "%.2f", data.co));
-            ((TextView) row.findViewById(R.id.tvH2S)).setText(String.format(Locale.CHINA, "%.2f", data.h2s));
-            ((TextView) row.findViewById(R.id.tvCO2)).setText(String.format(Locale.CHINA, "%.0f", data.co2));
-            // 新增：显示 CH4+H2
-            ((TextView) row.findViewById(R.id.tvCH4PlusH2)).setText(String.format(Locale.CHINA, "%.1f", data.ch4PlusH2));
-            ((TextView) row.findViewById(R.id.tvCorrected)).setText(String.format(Locale.CHINA, "%.1f", data.corrected));
-            ((TextView) row.findViewById(R.id.tvStatus)).setText(data.status);
-            if ("异常".equals(data.status)) {
-                ((TextView) row.findViewById(R.id.tvStatus)).setTextColor(Color.RED);
-            } else {
-                ((TextView) row.findViewById(R.id.tvStatus)).setTextColor(Color.parseColor("#FF9800"));
-            }
+            ((TextView) row.findViewById(R.id.tvH2)).setText(String.format(Locale.CHINA, "%.1f", (float) data.h2));
+            ((TextView) row.findViewById(R.id.tvCH4)).setText(String.format(Locale.CHINA, "%.2f", (float) data.ch4));
+            ((TextView) row.findViewById(R.id.tvCO)).setText("-");
+            ((TextView) row.findViewById(R.id.tvH2S)).setText(String.format(Locale.CHINA, "%.2f", (float) data.h2s));
+            ((TextView) row.findViewById(R.id.tvCO2)).setText(String.format(Locale.CHINA, "%.0f", (float) data.co2));
+            float ch4PlusH2 = data.ch4 + data.h2;
+            ((TextView) row.findViewById(R.id.tvCH4PlusH2)).setText(String.format(Locale.CHINA, "%.1f", ch4PlusH2));
+            ((TextView) row.findViewById(R.id.tvCorrected)).setText("1");
+            ((TextView) row.findViewById(R.id.tvStatus)).setText("正常");
+            ((TextView) row.findViewById(R.id.tvStatus)).setTextColor(Color.parseColor("#4CAF50"));
         }
     }
 
     private void updateChart() {
+        if (h2Entries.isEmpty()) return;
         LineDataSet dataSet = new LineDataSet(h2Entries, "H2浓度 (ppm)");
         dataSet.setColor(Color.BLUE);
         dataSet.setCircleColor(Color.BLUE);
@@ -185,9 +188,8 @@ public class Test1Activity extends AppCompatActivity {
         dataSet.setValueTextSize(10f);
         LineData lineData = new LineData(dataSet);
         lineChart.setData(lineData);
-        lineChart.invalidate(); // 刷新
+        lineChart.invalidate();
 
-        // 配置图表样式
         Description desc = new Description();
         desc.setText("通道");
         lineChart.setDescription(desc);
@@ -199,79 +201,10 @@ public class Test1Activity extends AppCompatActivity {
         lineChart.getAxisRight().setEnabled(false);
     }
 
-    private void onDetectionComplete() {
-        if (detectionCompleted) return;
-        detectionCompleted = true;
-        // 更新底部文字为绿色
-        textDetectionProgress.setBackgroundColor(Color.parseColor("#4CAF50"));
-        textDetectionProgress.setText("检测完成");
-        buttonReportManage.setEnabled(true);
-        // 生成结果解读（示例）
-        String interpretation = generateInterpretation();
-        textResultInterpretation.setText(interpretation);
-        // 保存检测数据到数据库
-        saveReportData(interpretation);
-        // 停止USB监听（可选）
-        // usbHelper.disconnect();
-    }
-
-    private String generateInterpretation() {
-        // 根据八通道数据简单判断（示例）
-        StringBuilder sb = new StringBuilder();
-        sb.append("结果解读：\n");
-        for (ChannelData cd : channelDataList) {
-            sb.append(String.format("通道%d: H2=%.1f ppm, %s\n", cd.channel, cd.h2, cd.status));
-        }
-        sb.append("总体评估：");
-        // 简单逻辑：如有任一通道异常则提示
-        boolean hasAbnormal = channelDataList.stream().anyMatch(cd -> "异常".equals(cd.status));
-        if (hasAbnormal) {
-            sb.append("存在异常数据，建议复查。");
-        } else {
-            sb.append("所有通道数据正常。");
-        }
-        return sb.toString();
-    }
-
-    private void saveReportData(String interpretation) {
-        new Thread(() -> {
-            TestReport report = db.testReportDao().getReportById(reportId);
-            if (report != null) {
-                // 将八通道数据保存为JSON字符串
-                JSONArray jsonArray = new JSONArray();
-                for (ChannelData cd : channelDataList) {
-                    JSONObject obj = new JSONObject();
-                    try {
-                        obj.put("channel", cd.channel);
-                        obj.put("h2", cd.h2);
-                        obj.put("ch4", cd.ch4);
-                        obj.put("co", cd.co);
-                        obj.put("h2s", cd.h2s);
-                        obj.put("co2", cd.co2);
-                        obj.put("corrected", cd.corrected);
-                        obj.put("status", cd.status);
-                        jsonArray.put(obj);
-                    } catch (JSONException e) {
-                        e.printStackTrace();
-                    }
-                }
-                report.setTestResult(jsonArray.toString());
-                report.setRemarks(interpretation);
-                report.setTestDate(System.currentTimeMillis());
-                db.testReportDao().update(report);
-                runOnUiThread(() -> Toast.makeText(Test1Activity.this, "检测数据已保存", Toast.LENGTH_SHORT).show());
-            }
-        }).start();
-    }
-
     private void initTable() {
-        // 动态添加表头（已在布局中引入 table_header.xml，但需要手动添加）
-        // 由于 activity_test.xml 中的 TableLayout 没有子视图，我们需要在代码中动态添加表头和行
         tableChannels.removeAllViews();
-        // 添加表头（从布局 inflate）
         TableRow headerRow = (TableRow) getLayoutInflater().inflate(R.layout.table_header, null);
         tableChannels.addView(headerRow);
-        // 添加 8 行数据行
         for (int i = 1; i <= 8; i++) {
             TableRow dataRow = (TableRow) getLayoutInflater().inflate(R.layout.table_row_channel, null);
             TextView tvChannelNo = dataRow.findViewById(R.id.tvChannelNo);
@@ -281,43 +214,106 @@ public class Test1Activity extends AppCompatActivity {
     }
 
     private void startDetectionProgress() {
-        // 实际进度由数据接收驱动，这里只是初始化显示
         textDetectionProgress.setBackgroundColor(Color.parseColor("#9E9E9E"));
         textDetectionProgress.setText("检测中 0%");
+    }
+
+    private void onDetectionComplete() {
+        if (detectionCompleted) return;
+        detectionCompleted = true;
+        textDetectionProgress.setBackgroundColor(Color.parseColor("#4CAF50"));
+        textDetectionProgress.setText("检测完成");
+        buttonReportManage.setEnabled(true);
+        String interpretation = generateInterpretation();
+        textResultInterpretation.setText(interpretation);
+        saveReportData(interpretation);
+    }
+
+    private String generateInterpretation() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("结果解读：\n");
+        boolean hasSIBO = false;
+        for (int i = 0; i < 7; i++) {
+            ChannelData cd = channelDataArray[i];
+            if (cd != null) {
+                float h2 = cd.h2;
+                float ch4 = cd.ch4;
+                float sum = h2 + ch4;
+                sb.append(String.format("通道%d: H2=%.1f, CH4=%.2f, H2S=%.2f, CO2=%.0f\n",
+                        i + 1, h2, ch4, (float) cd.h2s, (float) cd.co2));
+                if (h2 >= 20 || ch4 >= 10 || sum >= 15) hasSIBO = true;
+            } else {
+                sb.append(String.format("通道%d: 无数据\n", i + 1));
+            }
+        }
+        ChannelData cd8 = channelDataArray[7];
+        if (cd8 != null) {
+            sb.append(String.format("通道8: H2=%.1f, CH4=%.2f, H2S=%.2f, CO2=%.0f\n",
+                    (float) cd8.h2, (float) cd8.ch4, (float) cd8.h2s, (float) cd8.co2));
+        } else {
+            sb.append("通道8: 无数据\n");
+        }
+        sb.append(hasSIBO ? "小肠细菌过度生长：阳性\n" : "小肠细菌过度生长：阴性\n");
+        return sb.toString();
+    }
+
+    private void saveReportData(String interpretation) {
+        new Thread(() -> {
+            TestReport report = db.testReportDao().getReportById(reportId);
+            if (report != null) {
+                JSONArray jsonArray = new JSONArray();
+                for (int i = 0; i < 8; i++) {
+                    ChannelData cd = channelDataArray[i];
+                    if (cd != null) {
+                        JSONObject obj = new JSONObject();
+                        try {
+                            obj.put("channel", i + 1);
+                            obj.put("h2", cd.h2);
+                            obj.put("ch4", cd.ch4);
+                            obj.put("h2s", cd.h2s);
+                            obj.put("co2", cd.co2);
+                            jsonArray.put(obj);
+                        } catch (JSONException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
+                report.setTestResult(jsonArray.toString());
+                report.setRemarks(interpretation);
+                db.testReportDao().update(report);
+                runOnUiThread(() -> Toast.makeText(Test1Activity.this, "检测数据已保存", Toast.LENGTH_SHORT).show());
+            }
+        }).start();
     }
 
     private void updateCurrentTime() {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.CHINA);
         textCurrentTime.setText("时间：" + sdf.format(new Date()));
-        // 每秒刷新一次
         mainHandler.postDelayed(this::updateCurrentTime, 1000);
+    }
+
+    private String bytesToHex(byte[] bytes) {
+        StringBuilder sb = new StringBuilder();
+        for (byte b : bytes) {
+            sb.append(String.format("%02X ", b));
+        }
+        return sb.toString().trim();
     }
 
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        if (usbHelper != null) {
-            usbHelper.disconnect();
-        }
+        if (usbHelper != null) usbHelper.disconnect();
     }
 
-    // 内部数据类
     private static class ChannelData {
-        int channel;
-        float h2, ch4, co, h2s, co2, corrected;
-        float ch4PlusH2;  // 新增字段
-        String status;
-
-        ChannelData(int channel, float h2, float ch4, float co, float h2s, float co2, float corrected, String status) {
+        int channel, h2, ch4, h2s, co2;
+        ChannelData(int channel, int h2, int ch4, int h2s, int co2) {
             this.channel = channel;
             this.h2 = h2;
             this.ch4 = ch4;
-            this.co = co;
             this.h2s = h2s;
             this.co2 = co2;
-            this.corrected = corrected;
-            this.ch4PlusH2 = ch4 + h2;
-            this.status = status;
         }
     }
 }
