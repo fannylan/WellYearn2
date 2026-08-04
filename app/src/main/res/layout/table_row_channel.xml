@@ -35,16 +35,6 @@
         android:textColor="#FF6200EE" />
 
     <TextView
-        android:id="@+id/tvCO"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
-        android:layout_weight="1"
-        android:textSize="14sp"
-        android:gravity="center"
-        android:text="-"
-        android:textColor="#FF6200EE" />
-
-    <TextView
         android:id="@+id/tvH2S"
         android:layout_width="0dp"
         android:layout_height="wrap_content"

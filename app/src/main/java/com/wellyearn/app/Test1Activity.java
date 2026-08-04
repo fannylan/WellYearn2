@@ -167,7 +167,6 @@ public class Test1Activity extends AppCompatActivity {
         if (row != null) {
             ((TextView) row.findViewById(R.id.tvH2)).setText(String.format(Locale.CHINA, "%.1f", (float) data.h2));
             ((TextView) row.findViewById(R.id.tvCH4)).setText(String.format(Locale.CHINA, "%.2f", (float) data.ch4));
-            ((TextView) row.findViewById(R.id.tvCO)).setText("-");
             ((TextView) row.findViewById(R.id.tvH2S)).setText(String.format(Locale.CHINA, "%.2f", (float) data.h2s));
             ((TextView) row.findViewById(R.id.tvCO2)).setText(String.format(Locale.CHINA, "%.0f", (float) data.co2));
             float ch4PlusH2 = data.ch4 + data.h2;

@@ -64,7 +64,7 @@
                 android:id="@+id/tableChannels"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:stretchColumns="1,2,3,4,5,6,7" />
+                android:stretchColumns="1,2,3,4,5,6" />
         </ScrollView>
 
         <!-- 右侧：图表 + 数据接收显示 + 结果解读 -->
