@@ -40,7 +40,6 @@ public class Test1Activity extends AppCompatActivity {
     private Button buttonBack, buttonReportManage;
     private LineChart lineChart;
     private TableLayout tableChannels;
-
     private UsbSerialHelper usbHelper;
     private AppDatabase db;
     private long patientId;
@@ -63,6 +62,7 @@ public class Test1Activity extends AppCompatActivity {
         reportId = getIntent().getLongExtra("reportId", -1);
         patientNameStr = getIntent().getStringExtra("patientName");
         specimenNo = getIntent().getStringExtra("specimenNo");
+        String substrate = getIntent().getStringExtra("substrate");
 
         initViews();
         initDatabase();

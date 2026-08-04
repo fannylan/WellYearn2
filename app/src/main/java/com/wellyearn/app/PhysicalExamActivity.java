@@ -17,6 +17,8 @@ import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
+// 新增导入
+import android.widget.CheckBox;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
@@ -44,9 +46,11 @@ public class PhysicalExamActivity extends AppCompatActivity {
     private Spinner spGender;
     private TextView tvCurrentDate, tvDeviceStatus;
     private Button btnScan, btnBack, btnStartExam;
+    private Spinner spSubstrate;
 
     private UsbSerialHelper usbHelper;
     private AppDatabase db;
+    private CheckBox chkCH4, chkH2, chkCO, chkNO;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
     private int deviceStatus = -1;
@@ -77,11 +81,16 @@ public class PhysicalExamActivity extends AppCompatActivity {
         etAge = findViewById(R.id.etAge);
         etPhone = findViewById(R.id.etPhone);
         spGender = findViewById(R.id.spGender);
+        chkCH4 = findViewById(R.id.chkCH4);
+        chkH2 = findViewById(R.id.chkH2);
+        chkCO = findViewById(R.id.chkCO);
+        chkNO = findViewById(R.id.chkNO);
         tvCurrentDate = findViewById(R.id.tvCurrentDate);
         tvDeviceStatus = findViewById(R.id.tvDeviceStatus);
         btnScan = findViewById(R.id.btnScan);
         btnBack = findViewById(R.id.btnBack);
         btnStartExam = findViewById(R.id.btnStartExam);
+        spSubstrate = findViewById(R.id.spSubstrate);
 
         btnStartExam.setEnabled(false);
         btnStartExam.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.GRAY));
@@ -274,10 +283,17 @@ public class PhysicalExamActivity extends AppCompatActivity {
 
     private void startPhysicalExam() {
         isExamStarted = true;
+        String gender = spGender.getSelectedItem().toString();
+        String substrate = spSubstrate.getSelectedItem().toString();
+        // 获取复选框状态
+        boolean isCH4 = chkCH4.isChecked();
+        boolean isH2 = chkH2.isChecked();
+        boolean isCO = chkCO.isChecked();
+        boolean isNO = chkNO.isChecked();
 
         Patient patient = new Patient();
         patient.setName(etName.getText().toString());
-        patient.setGender(spGender.getSelectedItem().toString());
+        patient.setGender(gender);
         try {
             patient.setAge(Integer.parseInt(etAge.getText().toString()));
         } catch (NumberFormatException e) {
@@ -318,6 +334,13 @@ public class PhysicalExamActivity extends AppCompatActivity {
         intent.putExtra("reportId", reportId);
         intent.putExtra("patientName", patient.getName());
         intent.putExtra("specimenNo", etSpecimenNo.getText().toString());
+        intent.putExtra("substrate", substrate);
+        // 传递复选框状态
+        intent.putExtra("chkCH4", isCH4);
+        intent.putExtra("chkH2", isH2);
+        intent.putExtra("chkCO", isCO);
+        intent.putExtra("chkNO", isNO);
+
         startActivity(intent);
         finish();
     }

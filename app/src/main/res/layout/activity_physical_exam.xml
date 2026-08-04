@@ -107,7 +107,7 @@
             android:padding="8dp" />
     </LinearLayout>
 
-    <!-- 性别 -->
+    <!-- 性别（改为 Spinner） -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -156,6 +156,52 @@
             android:background="@android:drawable/editbox_background"
             android:padding="8dp" />
     </LinearLayout>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="底物选择："
+            android:textSize="14sp"
+            android:textStyle="bold" />
+        <Spinner
+            android:id="@+id/spSubstrate"
+            android:layout_width="0dp"
+            android:layout_weight="2"
+            android:layout_height="wrap_content"
+            android:entries="@array/substrate_array1"
+            android:background="@android:drawable/editbox_background" />
+    </LinearLayout>
+    <!-- 新增：全身血红蛋白总量 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="血红蛋白总量："
+            android:textSize="14sp"
+            android:textStyle="bold" />
+        <EditText
+            android:id="@+id/etHemoglobin"
+            android:layout_width="0dp"
+            android:layout_weight="2"
+            android:layout_height="wrap_content"
+            android:hint="单位 g/L"
+            android:inputType="numberDecimal"
+            android:background="@android:drawable/editbox_background"
+            android:padding="8dp" />
+    </LinearLayout>
 
     <!-- 联系电话 -->
     <LinearLayout
@@ -181,6 +227,43 @@
             android:inputType="phone"
             android:background="@android:drawable/editbox_background"
             android:padding="8dp" />
+    </LinearLayout>
+
+    <!-- 新增：四个复选框（CH4, H2, CO, NO） -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <CheckBox
+            android:id="@+id/chkCH4"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="CH4" />
+
+        <CheckBox
+            android:id="@+id/chkH2"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="H2" />
+
+        <CheckBox
+            android:id="@+id/chkCO"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="CO" />
+
+        <CheckBox
+            android:id="@+id/chkNO"
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:text="NO" />
     </LinearLayout>
 
     <!-- 体检科（固定） -->
@@ -243,5 +326,6 @@
             android:enabled="false"
             android:backgroundTint="#4CAF50" />
     </LinearLayout>
+
 
 </LinearLayout>

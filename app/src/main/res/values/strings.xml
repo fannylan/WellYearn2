@@ -27,4 +27,8 @@
         <item>男</item>
         <item>女</item>
     </string-array>
+    <string-array name="substrate_array1">
+        <item>葡萄糖</item>
+        <item>乳果糖</item>
+    </string-array>
 </resources>

@@ -70,7 +70,10 @@
 
                 <LinearLayout style="@style/HorizontalInfoRow">
                     <TextView style="@style/InfoLabelLeft" android:text="患者性别：" />
-                    <EditText android:id="@+id/etPatientGender" style="@style/InfoEditRight" />
+                    <Spinner
+                        android:id="@+id/spPatientGender"
+                        style="@style/InfoSpinnerRight"
+                        android:entries="@array/gender_array" />
                 </LinearLayout>
 
                 <LinearLayout style="@style/HorizontalInfoRow">
@@ -116,6 +119,22 @@
                 <LinearLayout style="@style/HorizontalInfoRow">
                     <TextView style="@style/InfoLabelLeft" android:text="申请时间：" />
                     <TextView android:id="@+id/tvApplyTime" style="@style/InfoValueRight" />
+                </LinearLayout>
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="底物选择：" />
+                    <Spinner
+                        android:id="@+id/spSubstrate"
+                        style="@style/InfoSpinnerRight"
+                        android:entries="@array/substrate_array1" />
+                </LinearLayout>
+                <!-- 新增：全身血红蛋白总量 -->
+                <LinearLayout style="@style/HorizontalInfoRow">
+                    <TextView style="@style/InfoLabelLeft" android:text="血红蛋白总量：" />
+                    <EditText
+                        android:id="@+id/etHemoglobin"
+                        style="@style/InfoEditRight"
+                        android:hint="单位 g/L"
+                        android:inputType="numberDecimal" />
                 </LinearLayout>
 
             </LinearLayout>

@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -36,9 +37,12 @@ public class DetectAnalysisActivity extends AppCompatActivity {
     private EditText etScanResult;
     private Button btnScan, btnBack, btnGI, btnRBC, btnResp;
 
-    private EditText etSpecimenNo, etPatientType, etPatientName, etPatientGender, etPatientAge, etPhone;
+    private EditText etSpecimenNo, etPatientType, etPatientName, etPatientAge, etPhone;
+    // 将 etPatientGender 改为 spPatientGender
+    private Spinner spPatientGender;
     private TextView tvCurrentDate, tvApplyTime;
-    private EditText etApplyDoctor, etApplyDept;
+    private EditText etApplyDoctor, etApplyDept,etHemoglobin;
+    private Spinner spSubstrate;
 
     private AppDatabase db;
     private UsbSerialHelper usbHelper;
@@ -71,14 +75,16 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         etSpecimenNo = findViewById(R.id.etSpecimenNo);
         etPatientType = findViewById(R.id.etPatientType);
         etPatientName = findViewById(R.id.etPatientName);
-        etPatientGender = findViewById(R.id.etPatientGender);
+        spPatientGender = findViewById(R.id.spPatientGender);
         etPatientAge = findViewById(R.id.etPatientAge);
         etPhone = findViewById(R.id.etPhone);
+        spSubstrate = findViewById(R.id.spSubstrate);
 
         tvCurrentDate = findViewById(R.id.tvCurrentDate);
         tvApplyTime = findViewById(R.id.tvApplyTime);
         etApplyDoctor = findViewById(R.id.etApplyDoctor);
         etApplyDept = findViewById(R.id.etApplyDept);
+        etHemoglobin = findViewById(R.id.etHemoglobin);
 
         btnScan.setOnClickListener(v -> startScan());
         btnBack.setOnClickListener(v -> finish());
@@ -156,15 +162,25 @@ public class DetectAnalysisActivity extends AppCompatActivity {
     private void parseAndFillPatientInfo(String jsonStr) {
         try {
             currentPatientJson = new JSONObject(jsonStr);
+            JSONObject json = new JSONObject(jsonStr);
             etSpecimenNo.setText(currentPatientJson.optString("specimenNo", ""));
             etPatientType.setText(currentPatientJson.optString("patientType", ""));
             etPatientName.setText(currentPatientJson.optString("name", ""));
-            etPatientGender.setText(currentPatientJson.optString("gender", ""));
             etPatientAge.setText(currentPatientJson.optString("age", ""));
             etPhone.setText(currentPatientJson.optString("phone", ""));
             etApplyDoctor.setText(currentPatientJson.optString("applyDoctor", ""));
             etApplyDept.setText(currentPatientJson.optString("applyDept", ""));
             String applyTime = currentPatientJson.optString("applyTime", "");
+            String gender = json.optString("gender", "");
+            if (!gender.isEmpty()) {
+                String[] genders = getResources().getStringArray(R.array.gender_array);
+                for (int i = 0; i < genders.length; i++) {
+                    if (genders[i].equals(gender)) {
+                        spPatientGender.setSelection(i);
+                        break;
+                    }
+                }
+            }
             if (!applyTime.isEmpty()) {
                 tvApplyTime.setText(applyTime);
             }
@@ -178,11 +194,19 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         etSpecimenNo.setText(input);
         etPatientType.setText("门诊");
         etPatientName.setText("模拟患者");
-        etPatientGender.setText("男");
+        // 设置性别 Spinner 选中“男”
+        String[] genders = getResources().getStringArray(R.array.gender_array);
+        for (int i = 0; i < genders.length; i++) {
+            if ("男".equals(genders[i])) {
+                spPatientGender.setSelection(i);
+                break;
+            }
+        }
         etPatientAge.setText("30");
         etPhone.setText("13800138000");
         etApplyDoctor.setText("张医生");
         etApplyDept.setText("内科");
+        etHemoglobin.setText("140"); // 默认值
         isScanned = false;
         Toast.makeText(this, "已生成模拟患者信息", Toast.LENGTH_SHORT).show();
     }
@@ -206,7 +230,7 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         }
 
         final String name = etPatientName.getText().toString();
-        final String gender = etPatientGender.getText().toString();
+        final String gender = spPatientGender.getSelectedItem().toString();
         final String patientType = etPatientType.getText().toString();
         final int age;
         try {
@@ -219,7 +243,21 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         final String applyDoctor = etApplyDoctor.getText().toString();
         final String applyDept = etApplyDept.getText().toString();
         final String specimenNo = etSpecimenNo.getText().toString();
-
+        // 获取底物
+        String substrate = spSubstrate.getSelectedItem().toString();
+        // 获取血红蛋白总量
+        String hemoglobinStr = etHemoglobin.getText().toString();
+        if (TextUtils.isEmpty(hemoglobinStr)) {
+            Toast.makeText(this, "请输入血红蛋白总量", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        float hemoglobin;
+        try {
+            hemoglobin = Float.parseFloat(hemoglobinStr);
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "血红蛋白总量格式错误", Toast.LENGTH_SHORT).show();
+            return;
+        }
         new Thread(() -> {
             // 保存患者
             Patient patient = new Patient();
@@ -266,7 +304,9 @@ public class DetectAnalysisActivity extends AppCompatActivity {
                 intent.putExtra("reportId", reportId);
                 intent.putExtra("patientName", name);
                 intent.putExtra("specimenNo", specimenNo);
-                intent.putExtra("patientGender", etPatientGender.getText().toString());
+                intent.putExtra("patientGender", gender);
+                intent.putExtra("substrate", substrate);
+                intent.putExtra("hemoglobin", hemoglobin);
                 startActivity(intent);
             });
         }).start();
