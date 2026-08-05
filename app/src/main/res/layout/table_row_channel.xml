@@ -65,7 +65,7 @@
         android:textColor="#FF6200EE" />
 
     <TextView
-        android:id="@+id/tvCorrected"
+        android:id="@+id/tvCorrectionFactor"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"

@@ -76,8 +76,8 @@
             android:layout_marginStart="8dp">
 
             <!-- 动态图表 -->
-            <com.github.mikephil.charting.charts.LineChart
-                android:id="@+id/lineChart"
+            <com.github.mikephil.charting.charts.BarChart
+                android:id="@+id/barChart"
                 android:layout_width="match_parent"
                 android:layout_height="0dp"
                 android:layout_weight="2"

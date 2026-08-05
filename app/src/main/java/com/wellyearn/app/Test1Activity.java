@@ -12,13 +12,14 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.github.mikephil.charting.charts.LineChart;
+import com.github.mikephil.charting.charts.BarChart;
 import com.github.mikephil.charting.components.Description;
 import com.github.mikephil.charting.components.XAxis;
 import com.github.mikephil.charting.components.YAxis;
-import com.github.mikephil.charting.data.Entry;
-import com.github.mikephil.charting.data.LineData;
-import com.github.mikephil.charting.data.LineDataSet;
+import com.github.mikephil.charting.data.BarData;
+import com.github.mikephil.charting.data.BarDataSet;
+import com.github.mikephil.charting.data.BarEntry;
+import com.github.mikephil.charting.formatter.IndexAxisValueFormatter;
 import com.wellyearn.app.database.AppDatabase;
 import com.wellyearn.app.database.entity.TestReport;
 import com.wellyearn.app.usb.UsbSerialHelper;
@@ -35,10 +36,15 @@ import java.util.Locale;
 
 public class Test1Activity extends AppCompatActivity {
 
+    private static final int CHANNEL_COUNT = 8;
+    private static final float GROUP_SPACE = 0.2f;
+    private static final float BAR_SPACE = 0.05f;
+    private static final float BAR_WIDTH = 0.35f;
+
     private TextView textCurrentTime, textSpecimenNo, textPatientName;
     private TextView textDetectionProgress, textReceivedData, textResultInterpretation;
     private Button buttonBack, buttonReportManage;
-    private LineChart lineChart;
+    private BarChart barChart;
     private TableLayout tableChannels;
     private UsbSerialHelper usbHelper;
     private AppDatabase db;
@@ -46,12 +52,10 @@ public class Test1Activity extends AppCompatActivity {
     private long reportId;
     private String patientNameStr, specimenNo;
 
-    private ChannelData[] channelDataArray = new ChannelData[8];
+    private ChannelData[] channelDataArray = new ChannelData[CHANNEL_COUNT];
     private int receivedChannelCount = 0;
     private boolean detectionCompleted = false;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
-
-    private List<Entry> h2Entries = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -66,8 +70,9 @@ public class Test1Activity extends AppCompatActivity {
 
         initViews();
         initDatabase();
-        initUsbSerial();
         initTable();
+        initBarChart();
+        initUsbSerial();
 
         textPatientName.setText("患者姓名：" + (patientNameStr != null ? patientNameStr : "--"));
         textSpecimenNo.setText("标本编号：" + (specimenNo != null ? specimenNo : "--"));
@@ -84,7 +89,7 @@ public class Test1Activity extends AppCompatActivity {
         textResultInterpretation = findViewById(R.id.textResultInterpretation);
         buttonBack = findViewById(R.id.buttonBack);
         buttonReportManage = findViewById(R.id.buttonReportManage);
-        lineChart = findViewById(R.id.lineChart);
+        barChart = findViewById(R.id.barChart);
         tableChannels = findViewById(R.id.tableChannels);
 
         buttonBack.setOnClickListener(v -> finish());
@@ -147,16 +152,19 @@ public class Test1Activity extends AppCompatActivity {
         int co2 = (frame[13] & 0xFF) << 8 | (frame[12] & 0xFF);
 
         ChannelData cd = new ChannelData(channel + 1, h2, ch4, h2s, co2);
+        boolean isNewChannel = channelDataArray[channel] == null;
         channelDataArray[channel] = cd;
-        receivedChannelCount++;
+        if (isNewChannel) {
+            receivedChannelCount++;
+        }
 
         runOnUiThread(() -> {
             updateTableRow(channel + 1, cd);
-            h2Entries.add(new Entry(channel + 1, h2));
             updateChart();
-            int progress = receivedChannelCount * 100 / 8;
+            updateTableStatuses();
+            int progress = receivedChannelCount * 100 / CHANNEL_COUNT;
             textDetectionProgress.setText("检测中 " + progress + "%");
-            if (receivedChannelCount == 8) {
+            if (receivedChannelCount == CHANNEL_COUNT) {
                 onDetectionComplete();
             }
         });
@@ -171,33 +179,60 @@ public class Test1Activity extends AppCompatActivity {
             ((TextView) row.findViewById(R.id.tvCO2)).setText(String.format(Locale.CHINA, "%.0f", (float) data.co2));
             float ch4PlusH2 = data.ch4 + data.h2;
             ((TextView) row.findViewById(R.id.tvCH4PlusH2)).setText(String.format(Locale.CHINA, "%.1f", ch4PlusH2));
-            ((TextView) row.findViewById(R.id.tvCorrected)).setText("1");
-            ((TextView) row.findViewById(R.id.tvStatus)).setText("正常");
-            ((TextView) row.findViewById(R.id.tvStatus)).setTextColor(Color.parseColor("#4CAF50"));
+            ((TextView) row.findViewById(R.id.tvCorrectionFactor)).setText(
+                    String.format(Locale.CHINA, "%.2f", data.getCorrectionFactor()));
         }
     }
 
-    private void updateChart() {
-        if (h2Entries.isEmpty()) return;
-        LineDataSet dataSet = new LineDataSet(h2Entries, "H2浓度 (ppm)");
-        dataSet.setColor(Color.BLUE);
-        dataSet.setCircleColor(Color.BLUE);
-        dataSet.setLineWidth(2f);
-        dataSet.setCircleRadius(4f);
-        dataSet.setValueTextSize(10f);
-        LineData lineData = new LineData(dataSet);
-        lineChart.setData(lineData);
-        lineChart.invalidate();
+    private void initBarChart() {
+        Description description = new Description();
+        description.setText("修正后浓度（ppm）");
+        barChart.setDescription(description);
+        barChart.setDrawGridBackground(false);
+        barChart.setScaleEnabled(false);
+        barChart.setNoDataText("等待8通道数据");
 
-        Description desc = new Description();
-        desc.setText("通道");
-        lineChart.setDescription(desc);
-        XAxis xAxis = lineChart.getXAxis();
-        xAxis.setGranularity(1f);
+        XAxis xAxis = barChart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
-        YAxis leftAxis = lineChart.getAxisLeft();
+        xAxis.setGranularity(1f);
+        xAxis.setCenterAxisLabels(true);
+        xAxis.setLabelCount(CHANNEL_COUNT);
+        xAxis.setValueFormatter(new IndexAxisValueFormatter(
+                new String[]{"通道1", "通道2", "通道3", "通道4", "通道5", "通道6", "通道7", "通道8"}));
+
+        YAxis leftAxis = barChart.getAxisLeft();
         leftAxis.setAxisMinimum(0f);
-        lineChart.getAxisRight().setEnabled(false);
+        barChart.getAxisRight().setEnabled(false);
+        barChart.getLegend().setEnabled(true);
+    }
+
+    private void updateChart() {
+        List<BarEntry> correctedH2Entries = new ArrayList<>();
+        List<BarEntry> correctedCh4Entries = new ArrayList<>();
+        for (int i = 0; i < CHANNEL_COUNT; i++) {
+            ChannelData data = channelDataArray[i];
+            float correctedH2 = data != null ? data.getCorrectedH2() : 0f;
+            float correctedCh4 = data != null ? data.getCorrectedCh4() : 0f;
+            correctedH2Entries.add(new BarEntry(i, correctedH2));
+            correctedCh4Entries.add(new BarEntry(i, correctedCh4));
+        }
+
+        BarDataSet h2DataSet = new BarDataSet(correctedH2Entries, "修正后H2 (ppm)");
+        h2DataSet.setColor(Color.parseColor("#2196F3"));
+        h2DataSet.setValueTextSize(9f);
+        BarDataSet ch4DataSet = new BarDataSet(correctedCh4Entries, "修正后CH4 (ppm)");
+        ch4DataSet.setColor(Color.parseColor("#FF9800"));
+        ch4DataSet.setValueTextSize(9f);
+
+        BarData barData = new BarData(h2DataSet, ch4DataSet);
+        barData.setBarWidth(BAR_WIDTH);
+        barChart.setData(barData);
+        barChart.getXAxis().setAxisMinimum(0f);
+        barChart.getXAxis().setAxisMaximum(
+                barData.getGroupWidth(GROUP_SPACE, BAR_SPACE) * CHANNEL_COUNT);
+        barChart.groupBars(0f, GROUP_SPACE, BAR_SPACE);
+        barChart.notifyDataSetChanged();
+        barChart.invalidate();
     }
 
     private void initTable() {
@@ -228,31 +263,80 @@ public class Test1Activity extends AppCompatActivity {
         saveReportData(interpretation);
     }
 
-    private String generateInterpretation() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("结果解读：\n");
-        boolean hasSIBO = false;
-        for (int i = 0; i < 7; i++) {
-            ChannelData cd = channelDataArray[i];
-            if (cd != null) {
-                float h2 = cd.h2;
-                float ch4 = cd.ch4;
-                float sum = h2 + ch4;
-                sb.append(String.format("通道%d: H2=%.1f, CH4=%.2f, H2S=%.2f, CO2=%.0f\n",
-                        i + 1, h2, ch4, (float) cd.h2s, (float) cd.co2));
-                if (h2 >= 20 || ch4 >= 10 || sum >= 15) hasSIBO = true;
+    private void updateTableStatuses() {
+        for (int i = 0; i < CHANNEL_COUNT; i++) {
+            ChannelData data = channelDataArray[i];
+            if (data == null) continue;
+
+            TableRow row = (TableRow) tableChannels.getChildAt(i + 1);
+            if (row == null) continue;
+
+            TextView statusView = row.findViewById(R.id.tvStatus);
+            if (!data.hasValidCorrectionFactor()) {
+                setStatus(statusView, "系数无效", "#F44336");
+            } else if (i >= 3 && (channelDataArray[0] == null
+                    || !channelDataArray[0].hasValidCorrectionFactor())) {
+                setStatus(statusView, "等待基线", "#FF9800");
+            } else if (isChannelPositive(i)) {
+                setStatus(statusView, "阳性", "#F44336");
             } else {
-                sb.append(String.format("通道%d: 无数据\n", i + 1));
+                setStatus(statusView, "正常", "#4CAF50");
             }
         }
-        ChannelData cd8 = channelDataArray[7];
-        if (cd8 != null) {
-            sb.append(String.format("通道8: H2=%.1f, CH4=%.2f, H2S=%.2f, CO2=%.0f\n",
-                    (float) cd8.h2, (float) cd8.ch4, (float) cd8.h2s, (float) cd8.co2));
-        } else {
-            sb.append("通道8: 无数据\n");
+    }
+
+    private void setStatus(TextView statusView, String status, String color) {
+        statusView.setText(status);
+        statusView.setTextColor(Color.parseColor(color));
+    }
+
+    private boolean isSiboPositive() {
+        for (int i = 0; i < CHANNEL_COUNT; i++) {
+            if (isChannelPositive(i)) return true;
         }
-        sb.append(hasSIBO ? "小肠细菌过度生长：阳性\n" : "小肠细菌过度生长：阴性\n");
+        return false;
+    }
+
+    private boolean isChannelPositive(int channelIndex) {
+        ChannelData data = channelDataArray[channelIndex];
+        if (data == null || !data.hasValidCorrectionFactor()) return false;
+
+        float h2 = data.getCorrectedH2();
+        float ch4 = data.getCorrectedCh4();
+        float baselineH2 = 0f;
+        float baselineCh4 = 0f;
+        if (channelIndex >= 3) {
+            ChannelData baseline = channelDataArray[0];
+            if (baseline == null || !baseline.hasValidCorrectionFactor()) return false;
+            baselineH2 = baseline.getCorrectedH2();
+            baselineCh4 = baseline.getCorrectedCh4();
+        }
+        return SiboDiagnosisRules.isChannelPositive(
+                channelIndex, h2, ch4, baselineH2, baselineCh4);
+    }
+
+    private String generateInterpretation() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("结果解读（修正后浓度）：\n");
+        for (int i = 0; i < CHANNEL_COUNT; i++) {
+            ChannelData cd = channelDataArray[i];
+            if (cd != null) {
+                if (cd.hasValidCorrectionFactor()) {
+                    sb.append(String.format(Locale.CHINA,
+                            "通道%d: H2=%.1f ppm, CH4=%.2f ppm, 修正系数=%.2f\n",
+                            i + 1, cd.getCorrectedH2(), cd.getCorrectedCh4(),
+                            cd.getCorrectionFactor()));
+                } else {
+                    sb.append(String.format(Locale.CHINA,
+                            "通道%d: CO2=%.0f ppm，修正系数无效\n", i + 1, (float) cd.co2));
+                }
+            } else {
+                sb.append(String.format(Locale.CHINA, "通道%d: 无数据\n", i + 1));
+            }
+        }
+        sb.append(isSiboPositive()
+                ? "诊断结果：小肠细菌过度生长（SIBO）阳性\n"
+                : "诊断结果：小肠细菌过度生长（SIBO）阴性\n");
         return sb.toString();
     }
 
@@ -261,7 +345,7 @@ public class Test1Activity extends AppCompatActivity {
             TestReport report = db.testReportDao().getReportById(reportId);
             if (report != null) {
                 JSONArray jsonArray = new JSONArray();
-                for (int i = 0; i < 8; i++) {
+                for (int i = 0; i < CHANNEL_COUNT; i++) {
                     ChannelData cd = channelDataArray[i];
                     if (cd != null) {
                         JSONObject obj = new JSONObject();
@@ -271,6 +355,9 @@ public class Test1Activity extends AppCompatActivity {
                             obj.put("ch4", cd.ch4);
                             obj.put("h2s", cd.h2s);
                             obj.put("co2", cd.co2);
+                            obj.put("correctionFactor", cd.getCorrectionFactor());
+                            obj.put("correctedH2", cd.getCorrectedH2());
+                            obj.put("correctedCh4", cd.getCorrectedCh4());
                             jsonArray.put(obj);
                         } catch (JSONException e) {
                             e.printStackTrace();
@@ -313,6 +400,26 @@ public class Test1Activity extends AppCompatActivity {
             this.ch4 = ch4;
             this.h2s = h2s;
             this.co2 = co2;
+        }
+
+        float getCorrectionFactor() {
+            return ConcentrationCorrection.correctionFactor(co2);
+        }
+
+        boolean hasValidCorrectionFactor() {
+            return ConcentrationCorrection.hasValidCorrectionFactor(co2);
+        }
+
+        float getCorrectedH2() {
+            return applyCorrection(h2);
+        }
+
+        float getCorrectedCh4() {
+            return applyCorrection(ch4);
+        }
+
+        private float applyCorrection(float originalValue) {
+            return ConcentrationCorrection.correctedValue(originalValue, co2);
         }
     }
 }

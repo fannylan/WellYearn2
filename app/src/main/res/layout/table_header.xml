@@ -63,7 +63,7 @@
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:text="修正值"
+        android:text="修正系数"
         android:textSize="14sp"
         android:textStyle="bold"
         android:gravity="center" />
