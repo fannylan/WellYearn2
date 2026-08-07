@@ -310,6 +310,7 @@ public class DetectAnalysisActivity extends AppCompatActivity {
                 intent.putExtra("patientName", name);
                 intent.putExtra("specimenNo", specimenNo);
                 intent.putExtra("patientGender", gender);
+                intent.putExtra("patientAge", age);
                 intent.putExtra("substrate", substrate);
                 intent.putExtra("hemoglobin", hemoglobin);
                 startActivity(intent);
