@@ -282,6 +282,11 @@ public class DetectAnalysisActivity extends AppCompatActivity {
             report.setTestDate(System.currentTimeMillis());
             report.setReportNumber("RP" + System.currentTimeMillis());
             report.setTestResult("");
+            report.setPatientInfo("");
+            report.setDetectionDataChart("");
+            report.setDiagnosisResult("");
+            report.setPdfFileName("");
+            report.setPdfUri("");
             report.setCreatedTime(System.currentTimeMillis());
 
             long reportId = db.testReportDao().insert(report);

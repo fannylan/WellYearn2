@@ -1,9 +1,13 @@
 package com.wellyearn.app;
 
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.TableLayout;
 import android.widget.TableRow;
@@ -21,12 +25,8 @@ import com.github.mikephil.charting.data.BarDataSet;
 import com.github.mikephil.charting.data.BarEntry;
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter;
 import com.wellyearn.app.database.AppDatabase;
-import com.wellyearn.app.database.entity.TestReport;
+import com.wellyearn.app.report.GastrointestinalReportService;
 import com.wellyearn.app.usb.UsbSerialHelper;
-
-import org.json.JSONArray;
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -36,6 +36,7 @@ import java.util.Locale;
 
 public class Test1Activity extends AppCompatActivity {
 
+    private static final String TAG = "Test1Activity";
     private static final int CHANNEL_COUNT = 8;
     private static final float GROUP_SPACE = 0.2f;
     private static final float BAR_SPACE = 0.05f;
@@ -55,6 +56,7 @@ public class Test1Activity extends AppCompatActivity {
     private ChannelData[] channelDataArray = new ChannelData[CHANNEL_COUNT];
     private int receivedChannelCount = 0;
     private boolean detectionCompleted = false;
+    private String generatedPdfUri;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @Override
@@ -94,10 +96,12 @@ public class Test1Activity extends AppCompatActivity {
 
         buttonBack.setOnClickListener(v -> finish());
         buttonReportManage.setOnClickListener(v -> {
-            if (detectionCompleted) {
-                Toast.makeText(this, "报告管理功能开发中", Toast.LENGTH_SHORT).show();
-            } else {
+            if (!detectionCompleted) {
                 Toast.makeText(this, "检测未完成，无法查看报告", Toast.LENGTH_SHORT).show();
+            } else if (generatedPdfUri == null || generatedPdfUri.isEmpty()) {
+                Toast.makeText(this, "诊断报告正在生成，请稍候", Toast.LENGTH_SHORT).show();
+            } else {
+                openGeneratedReport();
             }
         });
     }
@@ -257,7 +261,7 @@ public class Test1Activity extends AppCompatActivity {
         detectionCompleted = true;
         textDetectionProgress.setBackgroundColor(Color.parseColor("#4CAF50"));
         textDetectionProgress.setText("检测完成");
-        buttonReportManage.setEnabled(true);
+        buttonReportManage.setEnabled(false);
         String interpretation = generateInterpretation();
         textResultInterpretation.setText(interpretation);
         saveReportData(interpretation);
@@ -341,35 +345,59 @@ public class Test1Activity extends AppCompatActivity {
     }
 
     private void saveReportData(String interpretation) {
+        List<GastrointestinalReportService.ChannelMeasurement> measurements = new ArrayList<>();
+        for (ChannelData channelData : channelDataArray) {
+            if (channelData == null) continue;
+            measurements.add(new GastrointestinalReportService.ChannelMeasurement(
+                    channelData.channel,
+                    channelData.h2,
+                    channelData.ch4,
+                    channelData.h2s,
+                    channelData.co2,
+                    channelData.getCorrectionFactor(),
+                    channelData.getCorrectedH2(),
+                    channelData.getCorrectedCh4(),
+                    channelData.hasValidCorrectionFactor()));
+        }
+        boolean positive = isSiboPositive();
         new Thread(() -> {
-            TestReport report = db.testReportDao().getReportById(reportId);
-            if (report != null) {
-                JSONArray jsonArray = new JSONArray();
-                for (int i = 0; i < CHANNEL_COUNT; i++) {
-                    ChannelData cd = channelDataArray[i];
-                    if (cd != null) {
-                        JSONObject obj = new JSONObject();
-                        try {
-                            obj.put("channel", i + 1);
-                            obj.put("h2", cd.h2);
-                            obj.put("ch4", cd.ch4);
-                            obj.put("h2s", cd.h2s);
-                            obj.put("co2", cd.co2);
-                            obj.put("correctionFactor", cd.getCorrectionFactor());
-                            obj.put("correctedH2", cd.getCorrectedH2());
-                            obj.put("correctedCh4", cd.getCorrectedCh4());
-                            jsonArray.put(obj);
-                        } catch (JSONException e) {
-                            e.printStackTrace();
-                        }
-                    }
-                }
-                report.setTestResult(jsonArray.toString());
-                report.setRemarks(interpretation);
-                db.testReportDao().update(report);
-                runOnUiThread(() -> Toast.makeText(Test1Activity.this, "检测数据已保存", Toast.LENGTH_SHORT).show());
+            try {
+                GastrointestinalReportService.SaveResult result =
+                        GastrointestinalReportService.save(
+                                getApplicationContext(),
+                                db,
+                                reportId,
+                                specimenNo,
+                                measurements,
+                                positive,
+                                interpretation);
+                runOnUiThread(() -> {
+                    generatedPdfUri = result.getUri();
+                    buttonReportManage.setEnabled(true);
+                    Toast.makeText(
+                            Test1Activity.this,
+                            "三部分报告数据已保存，PDF已生成：" + result.getFileName(),
+                            Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception error) {
+                Log.e(TAG, "保存胃肠道检测报告失败", error);
+                runOnUiThread(() -> Toast.makeText(
+                        Test1Activity.this,
+                        "报告保存失败：" + error.getMessage(),
+                        Toast.LENGTH_LONG).show());
             }
         }).start();
+    }
+
+    private void openGeneratedReport() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(Uri.parse(generatedPdfUri), "application/pdf");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(intent);
+        } catch (ActivityNotFoundException error) {
+            Toast.makeText(this, "未找到可打开PDF的应用", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void updateCurrentTime() {
