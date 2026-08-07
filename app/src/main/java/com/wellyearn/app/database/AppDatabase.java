@@ -8,15 +8,17 @@ import androidx.room.RoomDatabase;
 import androidx.sqlite.db.SupportSQLiteDatabase;
 import androidx.annotation.NonNull;
 import com.wellyearn.app.database.dao.AdminDao;
+import com.wellyearn.app.database.dao.OperationLogDao;
 import com.wellyearn.app.database.dao.PatientDao;
 import com.wellyearn.app.database.dao.TestReportDao;
 import com.wellyearn.app.database.entity.Admin;
+import com.wellyearn.app.database.entity.OperationLog;
 import com.wellyearn.app.database.entity.Patient;
 import com.wellyearn.app.database.entity.TestReport;
 
 @Database(
-        entities = {Patient.class, TestReport.class, Admin.class},
-        version = 3,
+        entities = {Patient.class, TestReport.class, Admin.class, OperationLog.class},
+        version = 4,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -26,6 +28,7 @@ public abstract class AppDatabase extends RoomDatabase {
     public abstract PatientDao patientDao();
     public abstract TestReportDao testReportDao();
     public abstract AdminDao adminDao();
+    public abstract OperationLogDao operationLogDao();
 
     private static final Migration MIGRATION_2_3 = new Migration(2, 3) {
         @Override
@@ -38,6 +41,24 @@ public abstract class AppDatabase extends RoomDatabase {
         }
     };
 
+    private static final Migration MIGRATION_3_4 = new Migration(3, 4) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            database.execSQL("CREATE TABLE IF NOT EXISTS operation_logs ("
+                    + "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, "
+                    + "operator_username TEXT, "
+                    + "action TEXT, "
+                    + "report_id INTEGER NOT NULL, "
+                    + "report_file_name TEXT, "
+                    + "detail TEXT, "
+                    + "success INTEGER NOT NULL, "
+                    + "operation_time INTEGER NOT NULL)");
+            database.execSQL("CREATE INDEX IF NOT EXISTS "
+                    + "index_operation_logs_operation_time "
+                    + "ON operation_logs(operation_time)");
+        }
+    };
+
     public static AppDatabase getInstance(Context context) {
         if (instance == null) {
             synchronized (AppDatabase.class) {
@@ -46,7 +67,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     context.getApplicationContext(),
                                     AppDatabase.class,
                                     "wellyearn_database")
-                            .addMigrations(MIGRATION_2_3)
+                            .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
                             .fallbackToDestructiveMigration()
                             .build();
                 }

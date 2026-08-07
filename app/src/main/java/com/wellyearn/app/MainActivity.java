@@ -14,7 +14,6 @@ import androidx.cardview.widget.CardView;
 import androidx.core.content.ContextCompat;
 
 import com.wellyearn.app.database.AppDatabase;
-import com.wellyearn.app.database.entity.Admin;
 import com.wellyearn.app.usb.UsbSerialHelper;
 
 import java.io.ByteArrayOutputStream;
@@ -63,7 +62,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         cardReport.setOnClickListener(v -> {
-            Toast.makeText(this, "报告检索模块开发中", Toast.LENGTH_SHORT).show();
+            Intent intent = new Intent(MainActivity.this, ReportSearchActivity.class);
+            startActivity(intent);
         });
 
         cardHelp.setOnClickListener(v -> {
@@ -266,18 +266,7 @@ public class MainActivity extends AppCompatActivity {
     private void initDatabase() {
         new Thread(() -> {
             AppDatabase db = AppDatabase.getInstance(this);
-            if (db.adminDao().getAdminCount() == 0) {
-                Admin admin = new Admin();
-                admin.setUsername("admin");
-                admin.setPassword("admin123");
-                admin.setRole("超级管理员");
-                admin.setName("系统管理员");
-                admin.setPhone("0755-12345678");
-                admin.setEmail("admin@wellyearn.com");
-                admin.setCreatedTime(System.currentTimeMillis());
-                db.adminDao().insert(admin);
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "已创建默认管理员", Toast.LENGTH_SHORT).show());
-            }
+            DefaultAdminProvisioner.ensureDefaultSuperAdmin(db.adminDao());
         }).start();
     }
 

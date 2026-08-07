@@ -31,4 +31,11 @@
         <item>葡萄糖</item>
         <item>乳果糖</item>
     </string-array>
+    <string-array name="report_search_type_array">
+        <item>全部</item>
+        <item>胃肠道检测</item>
+        <item>红细胞寿命检测</item>
+        <item>呼吸道炎症检测</item>
+        <item>体检报告</item>
+    </string-array>
 </resources>
