@@ -14,6 +14,8 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
         long patientId = getIntent().getLongExtra("patientId", -1);
         long reportId = getIntent().getLongExtra("reportId", -1);
         String substrate = getIntent().getStringExtra("substrate");
+        int patientAge = getIntent().getIntExtra("patientAge", 0);
+        float totalHemoglobin = getIntent().getFloatExtra("hemoglobin", 0f);
         // 后续可以在这里初始化USB接收体检结果
     }
 }

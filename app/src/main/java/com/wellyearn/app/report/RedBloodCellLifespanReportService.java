@@ -32,7 +32,13 @@ import java.util.Locale;
 public final class RedBloodCellLifespanReportService {
 
     public static final String REPORT_FOLDER_NAME = "红细胞寿命检测报告";
+    public static final String PHYSICAL_EXAM_REPORT_FOLDER_NAME = "体检报告";
     private static final String REPORT_TYPE_NAME = "红细胞寿命检测";
+    private static final String PHYSICAL_EXAM_REPORT_TYPE_NAME = "体检报告";
+    private static final String REPORT_TITLE = "红细胞寿命检测诊断报告";
+    private static final String PHYSICAL_EXAM_REPORT_TITLE = "体检诊断报告";
+    private static final String REPORT_FOOTER = "WellYearn 红细胞寿命检测报告";
+    private static final String PHYSICAL_EXAM_REPORT_FOOTER = "WellYearn 体检报告";
     private static final int PAGE_WIDTH = 595;
     private static final int PAGE_HEIGHT = 842;
     private static final float PAGE_MARGIN = 42f;
@@ -51,6 +57,70 @@ public final class RedBloodCellLifespanReportService {
             float totalHemoglobin,
             float lifespanDays,
             String interpretation) throws IOException, JSONException {
+        return saveInternal(
+                context,
+                database,
+                reportId,
+                barcode,
+                originalCo,
+                co2,
+                correctionFactor,
+                correctedCo,
+                totalHemoglobin,
+                lifespanDays,
+                interpretation,
+                REPORT_FOLDER_NAME,
+                REPORT_TYPE_NAME,
+                REPORT_TITLE,
+                REPORT_FOOTER);
+    }
+
+    public static SaveResult savePhysicalExam(
+            Context context,
+            AppDatabase database,
+            long reportId,
+            String barcode,
+            float originalCo,
+            float co2,
+            float correctionFactor,
+            float correctedCo,
+            float totalHemoglobin,
+            float lifespanDays,
+            String interpretation) throws IOException, JSONException {
+        return saveInternal(
+                context,
+                database,
+                reportId,
+                barcode,
+                originalCo,
+                co2,
+                correctionFactor,
+                correctedCo,
+                totalHemoglobin,
+                lifespanDays,
+                interpretation,
+                PHYSICAL_EXAM_REPORT_FOLDER_NAME,
+                PHYSICAL_EXAM_REPORT_TYPE_NAME,
+                PHYSICAL_EXAM_REPORT_TITLE,
+                PHYSICAL_EXAM_REPORT_FOOTER);
+    }
+
+    private static SaveResult saveInternal(
+            Context context,
+            AppDatabase database,
+            long reportId,
+            String barcode,
+            float originalCo,
+            float co2,
+            float correctionFactor,
+            float correctedCo,
+            float totalHemoglobin,
+            float lifespanDays,
+            String interpretation,
+            String reportFolderName,
+            String reportTypeName,
+            String reportTitle,
+            String reportFooter) throws IOException, JSONException {
         TestReport report = database.testReportDao().getReportById(reportId);
         if (report == null) {
             throw new IOException("未找到检测报告记录: " + reportId);
@@ -72,7 +142,8 @@ public final class RedBloodCellLifespanReportService {
                 originalCo, co2, correctionFactor, correctedCo, totalHemoglobin).toString();
         String diagnosisResult = buildDiagnosisResultJson(
                 validLifespan, lifespanDays, diagnosis, interpretation, report.getTestDate()).toString();
-        String fileName = buildFileName(barcode, patient.getName(), report.getTestDate());
+        String fileName = buildFileName(
+                barcode, patient.getName(), report.getTestDate(), reportTypeName);
 
         Uri pdfUri = null;
         try {
@@ -90,7 +161,11 @@ public final class RedBloodCellLifespanReportService {
                     totalHemoglobin,
                     lifespanDays,
                     validLifespan,
-                    diagnosis);
+                    diagnosis,
+                    reportFolderName,
+                    reportTypeName,
+                    reportTitle,
+                    reportFooter);
 
             report.setPatientInfo(patientInfo);
             report.setDetectionDataChart(detectionDataChart);
@@ -113,12 +188,28 @@ public final class RedBloodCellLifespanReportService {
     }
 
     public static String buildFileName(String barcode, String patientName, long reportDate) {
+        return buildFileName(barcode, patientName, reportDate, REPORT_TYPE_NAME);
+    }
+
+    public static String buildPhysicalExamFileName(
+            String barcode,
+            String patientName,
+            long reportDate) {
+        return buildFileName(
+                barcode, patientName, reportDate, PHYSICAL_EXAM_REPORT_TYPE_NAME);
+    }
+
+    private static String buildFileName(
+            String barcode,
+            String patientName,
+            long reportDate,
+            String reportTypeName) {
         String date = new SimpleDateFormat("yyyyMMdd", Locale.CHINA)
                 .format(new Date(reportDate));
         return sanitizeFileNamePart(barcode)
                 + sanitizeFileNamePart(patientName)
                 + date
-                + REPORT_TYPE_NAME
+                + reportTypeName
                 + ".pdf";
     }
 
@@ -212,27 +303,31 @@ public final class RedBloodCellLifespanReportService {
             float totalHemoglobin,
             float lifespanDays,
             boolean validLifespan,
-            String diagnosis) throws IOException {
+            String diagnosis,
+            String reportFolderName,
+            String reportTypeName,
+            String reportTitle,
+            String reportFooter) throws IOException {
         ContentResolver resolver = context.getContentResolver();
         ContentValues values = new ContentValues();
         values.put(MediaStore.MediaColumns.DISPLAY_NAME, fileName);
         values.put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf");
         values.put(
                 MediaStore.MediaColumns.RELATIVE_PATH,
-                Environment.DIRECTORY_DOCUMENTS + "/" + REPORT_FOLDER_NAME);
+                Environment.DIRECTORY_DOCUMENTS + "/" + reportFolderName);
         values.put(MediaStore.MediaColumns.IS_PENDING, 1);
 
         Uri collection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY);
         Uri uri = resolver.insert(collection, values);
         if (uri == null) {
-            throw new IOException("无法创建红细胞寿命诊断报告PDF");
+            throw new IOException("无法创建" + reportTypeName + "PDF");
         }
 
         boolean success = false;
         PdfDocument document = new PdfDocument();
         try (OutputStream output = resolver.openOutputStream(uri, "w")) {
             if (output == null) {
-                throw new IOException("无法写入红细胞寿命诊断报告PDF");
+                throw new IOException("无法写入" + reportTypeName + "PDF");
             }
             drawReportPage(
                     document,
@@ -247,7 +342,10 @@ public final class RedBloodCellLifespanReportService {
                     totalHemoglobin,
                     lifespanDays,
                     validLifespan,
-                    diagnosis);
+                    diagnosis,
+                    reportTypeName,
+                    reportTitle,
+                    reportFooter);
             document.writeTo(output);
             success = true;
         } finally {
@@ -262,7 +360,7 @@ public final class RedBloodCellLifespanReportService {
         try {
             int updatedRows = resolver.update(uri, completed, null, null);
             if (updatedRows <= 0) {
-                throw new IOException("无法完成红细胞寿命诊断报告PDF写入");
+                throw new IOException("无法完成" + reportTypeName + "PDF写入");
             }
         } catch (IOException | RuntimeException error) {
             resolver.delete(uri, null, null);
@@ -284,16 +382,26 @@ public final class RedBloodCellLifespanReportService {
             float totalHemoglobin,
             float lifespanDays,
             boolean validLifespan,
-            String diagnosis) {
+            String diagnosis,
+            String reportTypeName,
+            String reportTitle,
+            String reportFooter) {
         PdfDocument.Page page = document.startPage(
                 new PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create());
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
 
-        drawReportHeader(canvas, paint, report);
+        drawReportHeader(canvas, paint, report, reportTitle);
         float y = drawSectionTitle(canvas, paint, 100f, "第一部分  患者信息");
         y = drawPatientGrid(
-                canvas, paint, y, barcode, patient, report, applicationDepartment);
+                canvas,
+                paint,
+                y,
+                barcode,
+                patient,
+                report,
+                applicationDepartment,
+                reportTypeName);
 
         y += 14f;
         y = drawSectionTitle(canvas, paint, y, "第二部分  检测数据图表");
@@ -319,15 +427,19 @@ public final class RedBloodCellLifespanReportService {
                 validLifespan,
                 diagnosis);
 
-        drawFooter(canvas, paint);
+        drawFooter(canvas, paint, reportFooter);
         document.finishPage(page);
     }
 
-    private static void drawReportHeader(Canvas canvas, Paint paint, TestReport report) {
+    private static void drawReportHeader(
+            Canvas canvas,
+            Paint paint,
+            TestReport report,
+            String reportTitle) {
         paint.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         paint.setTextSize(22f);
         paint.setColor(Color.rgb(120, 31, 77));
-        drawCenteredText(canvas, paint, "红细胞寿命检测诊断报告", PAGE_WIDTH / 2f, 50f);
+        drawCenteredText(canvas, paint, reportTitle, PAGE_WIDTH / 2f, 50f);
 
         paint.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         paint.setTextSize(9.5f);
@@ -359,13 +471,14 @@ public final class RedBloodCellLifespanReportService {
             String barcode,
             Patient patient,
             TestReport report,
-            String applicationDepartment) {
+            String applicationDepartment,
+            String reportTypeName) {
         String[][] rows = {
                 {"条形码", safe(barcode), "患者姓名", safe(patient.getName())},
                 {"性别", safe(patient.getGender()), "年龄", patient.getAge() + "岁"},
                 {"患者类型", safe(patient.getPatientType()), "联系电话", safe(patient.getPhone())},
                 {"申请医生", safe(report.getDoctorName()), "申请科室", applicationDepartment},
-                {"报告编号", safe(report.getReportNumber()), "检测项目", REPORT_TYPE_NAME}
+                {"报告编号", safe(report.getReportNumber()), "检测项目", reportTypeName}
         };
         return drawKeyValueGrid(canvas, paint, y, rows, 25f);
     }
@@ -565,7 +678,7 @@ public final class RedBloodCellLifespanReportService {
         canvas.drawText("参考范围：70-140 天（含边界）；本报告结果仅供临床参考。", PAGE_MARGIN, y + 87f, paint);
     }
 
-    private static void drawFooter(Canvas canvas, Paint paint) {
+    private static void drawFooter(Canvas canvas, Paint paint, String reportFooter) {
         paint.setStyle(Paint.Style.STROKE);
         paint.setStrokeWidth(0.6f);
         paint.setColor(Color.rgb(214, 204, 209));
@@ -574,7 +687,7 @@ public final class RedBloodCellLifespanReportService {
         paint.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
         paint.setTextSize(8f);
         paint.setColor(Color.rgb(105, 96, 100));
-        canvas.drawText("WellYearn 红细胞寿命检测报告", PAGE_MARGIN, PAGE_HEIGHT - 20f, paint);
+        canvas.drawText(reportFooter, PAGE_MARGIN, PAGE_HEIGHT - 20f, paint);
         paint.setTextAlign(Paint.Align.RIGHT);
         canvas.drawText("第 1 / 1 页", PAGE_WIDTH - PAGE_MARGIN, PAGE_HEIGHT - 20f, paint);
         paint.setTextAlign(Paint.Align.LEFT);

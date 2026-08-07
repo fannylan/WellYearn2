@@ -28,4 +28,17 @@ public class RedBloodCellLifespanReportServiceTest {
                 "BC_001李_四20260807红细胞寿命检测.pdf",
                 RedBloodCellLifespanReportService.buildFileName("BC/001", "李:四", date));
     }
+
+    @Test
+    public void physicalExamFileNameUsesRequiredReportType() {
+        long date = new GregorianCalendar(2026, Calendar.AUGUST, 7).getTimeInMillis();
+
+        assertEquals(
+                "BC001张三20260807体检报告.pdf",
+                RedBloodCellLifespanReportService.buildPhysicalExamFileName(
+                        "BC001", "张三", date));
+        assertEquals(
+                "体检报告",
+                RedBloodCellLifespanReportService.PHYSICAL_EXAM_REPORT_FOLDER_NAME);
+    }
 }

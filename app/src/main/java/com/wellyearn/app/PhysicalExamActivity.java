@@ -42,7 +42,7 @@ import java.util.Locale;
 
 public class PhysicalExamActivity extends AppCompatActivity {
 
-    private EditText etScanResult, etSpecimenNo, etName, etAge, etPhone;
+    private EditText etScanResult, etSpecimenNo, etName, etAge, etHemoglobin, etPhone;
     private Spinner spGender;
     private TextView tvCurrentDate, tvDeviceStatus;
     private Button btnScan, btnBack, btnStartExam;
@@ -79,6 +79,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
         etSpecimenNo = findViewById(R.id.etSpecimenNo);
         etName = findViewById(R.id.etName);
         etAge = findViewById(R.id.etAge);
+        etHemoglobin = findViewById(R.id.etHemoglobin);
         etPhone = findViewById(R.id.etPhone);
         spGender = findViewById(R.id.spGender);
         chkCH4 = findViewById(R.id.chkCH4);
@@ -113,6 +114,10 @@ public class PhysicalExamActivity extends AppCompatActivity {
             }
             if (TextUtils.isEmpty(etAge.getText())) {
                 Toast.makeText(this, "请输入年龄", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (TextUtils.isEmpty(etHemoglobin.getText())) {
+                Toast.makeText(this, "请输入全身血红蛋白总量", Toast.LENGTH_SHORT).show();
                 return;
             }
             if (TextUtils.isEmpty(etPhone.getText())) {
@@ -225,6 +230,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
                 }
             }
             etAge.setText(json.optString("age", ""));
+            etHemoglobin.setText(json.optString("hemoglobin", ""));
             etPhone.setText(json.optString("phone", ""));
         } catch (JSONException e) {
             e.printStackTrace();
@@ -282,6 +288,22 @@ public class PhysicalExamActivity extends AppCompatActivity {
     }
 
     private void startPhysicalExam() {
+        final int patientAge;
+        try {
+            patientAge = Integer.parseInt(etAge.getText().toString().trim());
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "年龄格式错误，请填写数字", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        final float totalHemoglobin;
+        try {
+            totalHemoglobin = Float.parseFloat(etHemoglobin.getText().toString().trim());
+        } catch (NumberFormatException e) {
+            Toast.makeText(this, "全身血红蛋白总量格式错误，请填写数字", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
         isExamStarted = true;
         String gender = spGender.getSelectedItem().toString();
         String substrate = spSubstrate.getSelectedItem().toString();
@@ -290,15 +312,12 @@ public class PhysicalExamActivity extends AppCompatActivity {
         boolean isH2 = chkH2.isChecked();
         boolean isCO = chkCO.isChecked();
         boolean isNO = chkNO.isChecked();
+        boolean isCoOnly = PhysicalExamSelectionRouter.isCoOnly(isCH4, isH2, isCO, isNO);
 
         Patient patient = new Patient();
         patient.setName(etName.getText().toString());
         patient.setGender(gender);
-        try {
-            patient.setAge(Integer.parseInt(etAge.getText().toString()));
-        } catch (NumberFormatException e) {
-            patient.setAge(0);
-        }
+        patient.setAge(patientAge);
         patient.setPhone(etPhone.getText().toString());
         patient.setIdCard("");
         patient.setPatientType("体检模式");
@@ -320,8 +339,9 @@ public class PhysicalExamActivity extends AppCompatActivity {
 
         long reportId = db.testReportDao().insert(report);
 
-        // 发送启动体检指令：7E 10 00 00 00 10 7E
-        byte[] startCmd = hexStringToByteArray("7E 10 00 00 00 10 7E");
+        // 仅CO使用红细胞寿命检测协议，其余组合保留原体检协议。
+        String startCommand = PhysicalExamSelectionRouter.startCommand(isCoOnly);
+        byte[] startCmd = hexStringToByteArray(startCommand);
         if (usbHelper.isConnected()) {
             usbHelper.sendBytes(startCmd);
             Toast.makeText(this, "已发送启动指令", Toast.LENGTH_SHORT).show();
@@ -329,12 +349,18 @@ public class PhysicalExamActivity extends AppCompatActivity {
             Toast.makeText(this, "USB未连接，无法发送指令", Toast.LENGTH_SHORT).show();
         }
 
-        Intent intent = new Intent(PhysicalExamActivity.this, PhysicalExamResultActivity.class);
+        Class<?> targetActivity = isCoOnly
+                ? Test2Activity.class
+                : PhysicalExamResultActivity.class;
+        Intent intent = new Intent(PhysicalExamActivity.this, targetActivity);
         intent.putExtra("patientId", patientId);
         intent.putExtra("reportId", reportId);
         intent.putExtra("patientName", patient.getName());
         intent.putExtra("specimenNo", etSpecimenNo.getText().toString());
         intent.putExtra("substrate", substrate);
+        intent.putExtra("patientAge", patientAge);
+        intent.putExtra("hemoglobin", totalHemoglobin);
+        intent.putExtra(Test2Activity.EXTRA_PHYSICAL_EXAM_MODE, isCoOnly);
         // 传递复选框状态
         intent.putExtra("chkCH4", isCH4);
         intent.putExtra("chkH2", isH2);

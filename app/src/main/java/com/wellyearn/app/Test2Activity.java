@@ -35,6 +35,7 @@ import java.util.Locale;
 
 public class Test2Activity extends AppCompatActivity {
 
+    public static final String EXTRA_PHYSICAL_EXAM_MODE = "physicalExamMode";
     private static final String TAG = "Test2Activity";
 
     private TextView textCurrentTime, textSpecimenNo, textPatientName;
@@ -56,6 +57,7 @@ public class Test2Activity extends AppCompatActivity {
     private float lastCorrectionFactor = 0f;
     private float lastCorrectedCO = 0f;
     private float lastLifespanDays = 0f;
+    private boolean physicalExamMode = false;
     private boolean detectionCompleted = false;
     private String generatedPdfUri;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -70,6 +72,7 @@ public class Test2Activity extends AppCompatActivity {
         patientNameStr = getIntent().getStringExtra("patientName");
         specimenNo = getIntent().getStringExtra("specimenNo");
         totalHemoglobin = getIntent().getFloatExtra("hemoglobin", 0f);
+        physicalExamMode = getIntent().getBooleanExtra(EXTRA_PHYSICAL_EXAM_MODE, false);
 
         initViews();
         initDatabase();
@@ -280,18 +283,31 @@ public class Test2Activity extends AppCompatActivity {
         new Thread(() -> {
             try {
                 RedBloodCellLifespanReportService.SaveResult result =
-                        RedBloodCellLifespanReportService.save(
-                                getApplicationContext(),
-                                db,
-                                reportId,
-                                specimenNo,
-                                lastCO,
-                                lastCO2,
-                                lastCorrectionFactor,
-                                lastCorrectedCO,
-                                totalHemoglobin,
-                                lastLifespanDays,
-                                interpretation);
+                        physicalExamMode
+                                ? RedBloodCellLifespanReportService.savePhysicalExam(
+                                        getApplicationContext(),
+                                        db,
+                                        reportId,
+                                        specimenNo,
+                                        lastCO,
+                                        lastCO2,
+                                        lastCorrectionFactor,
+                                        lastCorrectedCO,
+                                        totalHemoglobin,
+                                        lastLifespanDays,
+                                        interpretation)
+                                : RedBloodCellLifespanReportService.save(
+                                        getApplicationContext(),
+                                        db,
+                                        reportId,
+                                        specimenNo,
+                                        lastCO,
+                                        lastCO2,
+                                        lastCorrectionFactor,
+                                        lastCorrectedCO,
+                                        totalHemoglobin,
+                                        lastLifespanDays,
+                                        interpretation);
                 runOnUiThread(() -> {
                     generatedPdfUri = result.getUri();
                     buttonReportManage.setEnabled(true);
