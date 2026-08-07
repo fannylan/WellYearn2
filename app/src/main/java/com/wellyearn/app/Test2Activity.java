@@ -1,9 +1,13 @@
 package com.wellyearn.app;
 
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.graphics.Color;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.util.Log;
 import android.widget.Button;
 import android.widget.TableLayout;
 import android.widget.TableRow;
@@ -20,11 +24,8 @@ import com.github.mikephil.charting.data.BarData;
 import com.github.mikephil.charting.data.BarDataSet;
 import com.github.mikephil.charting.data.BarEntry;
 import com.wellyearn.app.database.AppDatabase;
-import com.wellyearn.app.database.entity.TestReport;
+import com.wellyearn.app.report.RedBloodCellLifespanReportService;
 import com.wellyearn.app.usb.UsbSerialHelper;
-
-import org.json.JSONException;
-import org.json.JSONObject;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -34,21 +35,29 @@ import java.util.Locale;
 
 public class Test2Activity extends AppCompatActivity {
 
+    private static final String TAG = "Test2Activity";
+
     private TextView textCurrentTime, textSpecimenNo, textPatientName;
     private TextView textDetectionProgress, textReceivedData, textResultInterpretation;
     private Button buttonBack, buttonReportManage;
     private BarChart barChart;
     private TableLayout tableSingleChannel;
+    private TableRow singleChannelDataRow;
 
     private UsbSerialHelper usbHelper;
     private AppDatabase db;
     private long patientId;
     private long reportId;
-    private String patientNameStr, specimenNo, patientGender;
+    private String patientNameStr, specimenNo;
 
-    private float lastCO = 0, lastCO2 = 0, lastH2 = 0;
-    private boolean dataReceived = false;
+    private float totalHemoglobin;
+    private float lastCO = 0f;
+    private float lastCO2 = 0f;
+    private float lastCorrectionFactor = 0f;
+    private float lastCorrectedCO = 0f;
+    private float lastLifespanDays = 0f;
     private boolean detectionCompleted = false;
+    private String generatedPdfUri;
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @Override
@@ -60,7 +69,7 @@ public class Test2Activity extends AppCompatActivity {
         reportId = getIntent().getLongExtra("reportId", -1);
         patientNameStr = getIntent().getStringExtra("patientName");
         specimenNo = getIntent().getStringExtra("specimenNo");
-        patientGender = getIntent().getStringExtra("patientGender");
+        totalHemoglobin = getIntent().getFloatExtra("hemoglobin", 0f);
 
         initViews();
         initDatabase();
@@ -87,10 +96,12 @@ public class Test2Activity extends AppCompatActivity {
 
         buttonBack.setOnClickListener(v -> finish());
         buttonReportManage.setOnClickListener(v -> {
-            if (detectionCompleted) {
-                Toast.makeText(this, "报告管理功能开发中", Toast.LENGTH_SHORT).show();
-            } else {
+            if (!detectionCompleted) {
                 Toast.makeText(this, "检测未完成，无法查看报告", Toast.LENGTH_SHORT).show();
+            } else if (generatedPdfUri == null || generatedPdfUri.isEmpty()) {
+                Toast.makeText(this, "诊断报告正在生成，请稍候", Toast.LENGTH_SHORT).show();
+            } else {
+                openGeneratedReport();
             }
         });
     }
@@ -134,53 +145,63 @@ public class Test2Activity extends AppCompatActivity {
         int dataLen = ((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF);
         if (frameLen < dataLen + 1) return;
 
-        // 消息体：状态(1) + CO(2) + CO2(2) + H2(2)（H2可选，根据长度判断）
+        // 消息体：状态(1) + CO(2) + CO2(2)，后续协议字节不参与本检测。
         int offset = 5; // 状态在索引4，浓度从索引5开始
         if (frameLen < offset + 4) return; // 至少CO+CO2
 
         int co = (frame[offset+1] & 0xFF) << 8 | (frame[offset] & 0xFF);
         offset += 2;
         int co2 = (frame[offset+1] & 0xFF) << 8 | (frame[offset] & 0xFF);
-        offset += 2;
-        int h2;
-        if (frameLen >= offset + 2) {
-            h2 = (frame[offset+1] & 0xFF) << 8 | (frame[offset] & 0xFF);
-        } else {
-            h2 = 0;
-        }
 
         lastCO = co;
         lastCO2 = co2;
-        lastH2 = h2;
-        dataReceived = true;
+        lastCorrectionFactor = RedBloodCellLifespanCalculator.correctionFactor(lastCO2);
+        lastCorrectedCO = RedBloodCellLifespanCalculator.correctedCo(lastCO, lastCO2);
+        lastLifespanDays = RedBloodCellLifespanCalculator.lifespanDays(
+                totalHemoglobin, lastCorrectedCO);
 
         runOnUiThread(() -> {
-            updateSingleChannelTable(co, co2, h2);
-            updateBarChart(co, co2, h2);
+            updateSingleChannelTable();
+            updateBarChart();
             textDetectionProgress.setText("检测完成 100%");
             onDetectionComplete();
         });
     }
 
-    private void updateSingleChannelTable(float co, float co2, float h2) {
-        if (tableSingleChannel.getChildCount() < 2) return;
-        TableRow dataRow = (TableRow) tableSingleChannel.getChildAt(1);
-        if (dataRow == null) return;
-        ((TextView) dataRow.findViewById(R.id.tvCO)).setText(String.format(Locale.CHINA, "%.2f", co));
-        ((TextView) dataRow.findViewById(R.id.tvCO2)).setText(String.format(Locale.CHINA, "%.0f", co2));
-        ((TextView) dataRow.findViewById(R.id.tvH2)).setText(String.format(Locale.CHINA, "%.1f", h2));
-        ((TextView) dataRow.findViewById(R.id.tvCorrected)).setText("1");
-        ((TextView) dataRow.findViewById(R.id.tvStatus)).setText("正常");
-        ((TextView) dataRow.findViewById(R.id.tvStatus)).setTextColor(Color.parseColor("#4CAF50"));
+    private void updateSingleChannelTable() {
+        if (singleChannelDataRow == null) return;
+        ((TextView) singleChannelDataRow.findViewById(R.id.tvCO)).setText(
+                String.format(Locale.CHINA, "%.2f", lastCO));
+        ((TextView) singleChannelDataRow.findViewById(R.id.tvCO2)).setText(
+                String.format(Locale.CHINA, "%.0f", lastCO2));
+        ((TextView) singleChannelDataRow.findViewById(R.id.tvCorrected)).setText(
+                String.format(Locale.CHINA, "%.2f", lastCorrectionFactor));
+        TextView status = singleChannelDataRow.findViewById(R.id.tvStatus);
+        if (!RedBloodCellLifespanCalculator.hasValidCorrectionFactor(lastCO2)) {
+            status.setText("系数无效");
+            status.setTextColor(Color.parseColor("#F44336"));
+        } else if (!RedBloodCellLifespanCalculator.hasValidLifespan(
+                totalHemoglobin, lastCorrectedCO)) {
+            status.setText("数据无效");
+            status.setTextColor(Color.parseColor("#F44336"));
+        } else if (lastLifespanDays < RedBloodCellLifespanCalculator.MIN_NORMAL_DAYS) {
+            status.setText("寿命缩短");
+            status.setTextColor(Color.parseColor("#F44336"));
+        } else if (lastLifespanDays > RedBloodCellLifespanCalculator.MAX_NORMAL_DAYS) {
+            status.setText("寿命偏长");
+            status.setTextColor(Color.parseColor("#FF9800"));
+        } else {
+            status.setText("正常");
+            status.setTextColor(Color.parseColor("#4CAF50"));
+        }
     }
 
-    private void updateBarChart(float co, float co2, float h2) {
+    private void updateBarChart() {
         List<BarEntry> entries = new ArrayList<>();
-        entries.add(new BarEntry(0, co));
-        entries.add(new BarEntry(1, co2));
-        entries.add(new BarEntry(2, h2));
-        BarDataSet dataSet = new BarDataSet(entries, "浓度值");
-        dataSet.setColors(new int[]{Color.RED, Color.GREEN, Color.BLUE});
+        entries.add(new BarEntry(0, lastCorrectedCO));
+        entries.add(new BarEntry(1, totalHemoglobin));
+        BarDataSet dataSet = new BarDataSet(entries, "检测数据");
+        dataSet.setColors(new int[]{Color.parseColor("#2196F3"), Color.parseColor("#E91E63")});
         dataSet.setValueTextSize(12f);
         BarData barData = new BarData(dataSet);
         barChart.setData(barData);
@@ -189,13 +210,18 @@ public class Test2Activity extends AppCompatActivity {
         XAxis xAxis = barChart.getXAxis();
         xAxis.setPosition(XAxis.XAxisPosition.BOTTOM);
         xAxis.setGranularity(1f);
-        xAxis.setLabelCount(3);
-        xAxis.setValueFormatter(new com.github.mikephil.charting.formatter.IndexAxisValueFormatter(new String[]{"CO", "CO2", "H2"}));
+        xAxis.setLabelCount(2);
+        xAxis.setValueFormatter(new com.github.mikephil.charting.formatter.IndexAxisValueFormatter(
+                new String[]{"修正后CO浓度", "全身血红蛋白总量"}));
+        xAxis.setAxisMinimum(-0.5f);
+        xAxis.setAxisMaximum(1.5f);
+        xAxis.setTextSize(10f);
+        barChart.setExtraBottomOffset(12f);
         YAxis leftAxis = barChart.getAxisLeft();
         leftAxis.setAxisMinimum(0f);
         barChart.getAxisRight().setEnabled(false);
         Description desc = new Description();
-        desc.setText("气体浓度");
+        desc.setText("修正后CO浓度(ppm) / 全身血红蛋白总量");
         barChart.setDescription(desc);
     }
 
@@ -203,6 +229,7 @@ public class Test2Activity extends AppCompatActivity {
         tableSingleChannel.removeAllViews();
         android.view.View table = getLayoutInflater().inflate(R.layout.table_single_channel, null);
         tableSingleChannel.addView(table);
+        singleChannelDataRow = table.findViewById(R.id.dataRow);
     }
 
     private void startDetectionProgress() {
@@ -215,7 +242,7 @@ public class Test2Activity extends AppCompatActivity {
         detectionCompleted = true;
         textDetectionProgress.setBackgroundColor(Color.parseColor("#4CAF50"));
         textDetectionProgress.setText("检测完成");
-        buttonReportManage.setEnabled(true);
+        buttonReportManage.setEnabled(false);
         String interpretation = generateInterpretation();
         textResultInterpretation.setText(interpretation);
         saveReportData(interpretation);
@@ -224,41 +251,74 @@ public class Test2Activity extends AppCompatActivity {
     private String generateInterpretation() {
         StringBuilder sb = new StringBuilder();
         sb.append("结果解读：\n");
-        sb.append(String.format("CO浓度: %.2f ppm\n", lastCO));
-        sb.append(String.format("CO2浓度: %.0f ppm\n", lastCO2));
-        sb.append(String.format("H2浓度: %.1f ppm\n", lastH2));
+        sb.append(String.format(Locale.CHINA, "CO原始浓度：%.2f ppm\n", lastCO));
+        sb.append(String.format(Locale.CHINA, "CO2浓度：%.0f ppm\n", lastCO2));
+        sb.append(String.format(Locale.CHINA, "修正系数：%.2f\n", lastCorrectionFactor));
+        sb.append(String.format(Locale.CHINA, "CO修正后浓度：%.2f ppm\n", lastCorrectedCO));
+        sb.append(String.format(Locale.CHINA, "全身血红蛋白总量：%.2f\n", totalHemoglobin));
 
-        if (lastCO > 0 && patientGender != null && !patientGender.isEmpty()) {
-            int hb;
-            if ("男".equals(patientGender) || "男性".equals(patientGender)) hb = 140;
-            else if ("女".equals(patientGender) || "女性".equals(patientGender)) hb = 130;
-            else hb = 140;
-            float life = (float) (hb * 1.38 / lastCO);
-            sb.append(String.format("红细胞寿命: %.2f 天\n", life));
+        if (!RedBloodCellLifespanCalculator.hasValidCorrectionFactor(lastCO2)) {
+            lastLifespanDays = 0f;
+            sb.append("红细胞寿命（RBCS）：无法计算（修正系数无效）\n");
+            sb.append("诊断结果：检测数据无效\n");
+        } else if (!RedBloodCellLifespanCalculator.hasValidLifespan(
+                totalHemoglobin, lastCorrectedCO)) {
+            lastLifespanDays = 0f;
+            sb.append("红细胞寿命（RBCS）：无法计算（全身血红蛋白总量或CO修正后浓度无效）\n");
+            sb.append("诊断结果：检测数据不足\n");
         } else {
-            sb.append("红细胞寿命: 数据不足（无性别或CO浓度为零）\n");
+            lastLifespanDays = RedBloodCellLifespanCalculator.lifespanDays(
+                    totalHemoglobin, lastCorrectedCO);
+            String diagnosis = RedBloodCellLifespanCalculator.diagnosis(lastLifespanDays);
+            sb.append(String.format(Locale.CHINA, "红细胞寿命（RBCS）：%.2f 天\n", lastLifespanDays));
+            sb.append("诊断结果：").append(diagnosis).append("\n");
         }
         return sb.toString();
     }
 
     private void saveReportData(String interpretation) {
         new Thread(() -> {
-            TestReport report = db.testReportDao().getReportById(reportId);
-            if (report != null) {
-                JSONObject obj = new JSONObject();
-                try {
-                    obj.put("co", lastCO);
-                    obj.put("co2", lastCO2);
-                    obj.put("h2", lastH2);
-                } catch (JSONException e) {
-                    e.printStackTrace();
-                }
-                report.setTestResult(obj.toString());
-                report.setRemarks(interpretation);
-                db.testReportDao().update(report);
-                runOnUiThread(() -> Toast.makeText(Test2Activity.this, "数据已保存", Toast.LENGTH_SHORT).show());
+            try {
+                RedBloodCellLifespanReportService.SaveResult result =
+                        RedBloodCellLifespanReportService.save(
+                                getApplicationContext(),
+                                db,
+                                reportId,
+                                specimenNo,
+                                lastCO,
+                                lastCO2,
+                                lastCorrectionFactor,
+                                lastCorrectedCO,
+                                totalHemoglobin,
+                                lastLifespanDays,
+                                interpretation);
+                runOnUiThread(() -> {
+                    generatedPdfUri = result.getUri();
+                    buttonReportManage.setEnabled(true);
+                    Toast.makeText(
+                            Test2Activity.this,
+                            "三部分报告数据已保存，PDF已生成：" + result.getFileName(),
+                            Toast.LENGTH_LONG).show();
+                });
+            } catch (Exception error) {
+                Log.e(TAG, "保存红细胞寿命检测报告失败", error);
+                runOnUiThread(() -> Toast.makeText(
+                        Test2Activity.this,
+                        "报告保存失败：" + error.getMessage(),
+                        Toast.LENGTH_LONG).show());
             }
         }).start();
+    }
+
+    private void openGeneratedReport() {
+        try {
+            Intent intent = new Intent(Intent.ACTION_VIEW);
+            intent.setDataAndType(Uri.parse(generatedPdfUri), "application/pdf");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            startActivity(intent);
+        } catch (ActivityNotFoundException error) {
+            Toast.makeText(this, "未找到可打开PDF的应用", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private void updateCurrentTime() {
