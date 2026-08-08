@@ -10,8 +10,12 @@ import android.hardware.camera2.CameraManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.Log;
+import android.view.KeyEvent;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
@@ -59,8 +63,11 @@ public class PhysicalExamActivity extends AppCompatActivity {
 
     private static final int POLL_TIMEOUT_MS = 5000;
     private static final int CAMERA_PERMISSION_REQUEST = 100;
+    private static final int SCANNER_INPUT_SETTLE_MS = 200;
     private static final String START_EXAM_TEXT = "开始体检";
     private static final String STARTING_EXAM_TEXT = "正在启动...";
+
+    private final Runnable scannerInputCommitRunnable = this::commitScannerInput;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -95,6 +102,8 @@ public class PhysicalExamActivity extends AppCompatActivity {
         btnStartExam = findViewById(R.id.btnStartExam);
         spSubstrate = findViewById(R.id.spSubstrate);
 
+        initScannerInput();
+
         btnStartExam.setEnabled(false);
         btnStartExam.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.GRAY));
 
@@ -128,6 +137,46 @@ public class PhysicalExamActivity extends AppCompatActivity {
             }
             startPhysicalExam();
         });
+    }
+
+    private void initScannerInput() {
+        etScanResult.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                mainHandler.removeCallbacks(scannerInputCommitRunnable);
+                if (!TextUtils.isEmpty(editable.toString().trim())) {
+                    // 扫码枪通常会快速连续输入；短暂停顿后再按完整内容解析。
+                    mainHandler.postDelayed(scannerInputCommitRunnable, SCANNER_INPUT_SETTLE_MS);
+                }
+            }
+        });
+
+        etScanResult.setOnEditorActionListener((view, actionId, event) -> {
+            boolean enterPressed = event != null
+                    && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == KeyEvent.ACTION_DOWN;
+            if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
+                commitScannerInput();
+                return true;
+            }
+            return false;
+        });
+    }
+
+    private void commitScannerInput() {
+        mainHandler.removeCallbacks(scannerInputCommitRunnable);
+        String scanText = etScanResult.getText().toString().trim();
+        if (!scanText.isEmpty()) {
+            parseAndFillPatientInfo(scanText);
+        }
     }
 
     private void initDatabase() {
@@ -209,7 +258,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
             if (result.getContents() != null) {
                 String scanText = result.getContents();
                 etScanResult.setText(scanText);
-                parseAndFillPatientInfo(scanText);
+                commitScannerInput();
             } else {
                 Toast.makeText(this, "扫码取消", Toast.LENGTH_SHORT).show();
             }
@@ -488,6 +537,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        mainHandler.removeCallbacks(scannerInputCommitRunnable);
         super.onDestroy();
         if (usbHelper != null) usbHelper.disconnect();
     }

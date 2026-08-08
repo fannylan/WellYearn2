@@ -20,6 +20,8 @@
             android:layout_weight="1"
             android:layout_height="wrap_content"
             android:hint="扫码获取患者信息"
+            android:imeOptions="actionDone"
+            android:singleLine="true"
             android:textSize="16sp"
             android:padding="12dp"
             android:background="@android:drawable/editbox_background" />
