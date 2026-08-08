@@ -414,7 +414,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
                 patient.setCreatedTime(System.currentTimeMillis());
                 patient.setUpdatedTime(System.currentTimeMillis());
 
-                final long[] insertedIds = {-1L, -1L, -1L, -1L};
+                final long[] insertedIds = {-1L, -1L, -1L, -1L, -1L};
                 db.runInTransaction(() -> {
                     long patientId = db.patientDao().insert(patient);
                     insertedIds[0] = patientId;
@@ -430,11 +430,14 @@ public class PhysicalExamActivity extends AppCompatActivity {
                         insertedIds[3] = insertInitialReport(
                                 patientId, "呼吸道疾病检测", "RE");
                     }
+                    insertedIds[4] = insertInitialReport(
+                            patientId, "体检诊断报告", "PE");
                 });
                 final long patientId = insertedIds[0];
                 final long gastrointestinalReportId = insertedIds[1];
                 final long redBloodCellReportId = insertedIds[2];
                 final long respiratoryReportId = insertedIds[3];
+                final long physicalExamReportId = insertedIds[4];
                 final long reportId = PhysicalExamFlowCoordinator.reportIdFor(
                         firstDetection,
                         gastrointestinalReportId,
@@ -475,7 +478,8 @@ public class PhysicalExamActivity extends AppCompatActivity {
                             intent,
                             gastrointestinalReportId,
                             redBloodCellReportId,
-                            respiratoryReportId);
+                            respiratoryReportId,
+                            physicalExamReportId);
 
                     startActivity(intent);
                     finish();

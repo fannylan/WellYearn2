@@ -25,6 +25,7 @@ import com.github.mikephil.charting.formatter.IndexAxisValueFormatter;
 import com.wellyearn.app.database.AppDatabase;
 import com.wellyearn.app.report.AirwayInflammationReportService;
 import com.wellyearn.app.report.GastrointestinalReportService;
+import com.wellyearn.app.report.PhysicalExamReportService;
 import com.wellyearn.app.report.RedBloodCellLifespanReportService;
 import com.wellyearn.app.usb.UsbSerialHelper;
 
@@ -71,6 +72,7 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
     private long gastrointestinalReportId;
     private long redBloodCellReportId;
     private long respiratoryReportId;
+    private long physicalExamReportId;
     private String patientName;
     private String specimenNo;
     private int patientAge;
@@ -83,6 +85,7 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
     private boolean gastrointestinalCompleted;
     private boolean redBloodCellCompleted;
     private boolean respiratoryCompleted;
+    private boolean physicalExamReportSaving;
     private int gastrointestinalChannelCount;
     private int respiratoryPointCount;
     private PhysicalExamSelectionRouter.Detection currentDetection;
@@ -122,6 +125,8 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                 PhysicalExamFlowCoordinator.EXTRA_RED_BLOOD_CELL_REPORT_ID, -1L);
         respiratoryReportId = intent.getLongExtra(
                 PhysicalExamFlowCoordinator.EXTRA_RESPIRATORY_REPORT_ID, -1L);
+        physicalExamReportId = intent.getLongExtra(
+                PhysicalExamFlowCoordinator.EXTRA_PHYSICAL_EXAM_REPORT_ID, -1L);
         currentDetection = PhysicalExamSelectionRouter.firstSelected(
                 selectedCH4, selectedH2, selectedCO, selectedNO);
 
@@ -496,9 +501,13 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                 updateGastrointestinalRow(index, data);
             }
         }
-        gastrointestinalDiagnosis = isGastrointestinalPositive()
-                ? "小肠细菌过度生长（SIBO）阳性。"
-                : "小肠细菌过度生长（SIBO）阴性。";
+        String selectedGases = selectedH2 && selectedCH4
+                ? "H2、CH4"
+                : (selectedH2 ? "H2" : "CH4");
+        gastrointestinalDiagnosis = "检测气体：" + selectedGases + "；"
+                + (isGastrointestinalPositive()
+                        ? "小肠细菌过度生长（SIBO）阳性。"
+                        : "小肠细菌过度生长（SIBO）阴性。");
         updateDiagnosisText();
         saveGastrointestinalReport();
         startNextDetection(PhysicalExamSelectionRouter.Detection.GASTROINTESTINAL);
@@ -546,6 +555,7 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
             currentDetection = null;
             textDetectionProgress.setText("全部检测完成");
             textDetectionProgress.setBackgroundColor(Color.parseColor("#4CAF50"));
+            savePhysicalExamReport();
             return;
         }
 
@@ -627,10 +637,89 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                 channelIndex, h2, ch4, baselineH2, baselineCH4);
     }
 
+    private void savePhysicalExamReport() {
+        if (physicalExamReportId < 0 || physicalExamReportSaving) {
+            return;
+        }
+        physicalExamReportSaving = true;
+
+        PhysicalExamReportService.GastrointestinalSection gastrointestinalSection =
+                (selectedH2 || selectedCH4)
+                        ? new PhysicalExamReportService.GastrointestinalSection(
+                                selectedH2,
+                                selectedCH4,
+                                buildGastrointestinalMeasurements(),
+                                gastrointestinalDiagnosis)
+                        : null;
+        PhysicalExamReportService.RedBloodCellSection redBloodCellSection = selectedCO
+                ? new PhysicalExamReportService.RedBloodCellSection(
+                        lastCO,
+                        lastCO2ForRbc,
+                        lastCoCorrectionFactor,
+                        lastCorrectedCO,
+                        totalHemoglobin,
+                        lastLifespanDays,
+                        redBloodCellDiagnosis)
+                : null;
+        PhysicalExamReportService.RespiratorySection respiratorySection = selectedNO
+                ? new PhysicalExamReportService.RespiratorySection(
+                        patientAge,
+                        lastNO,
+                        lastCO2ForNo,
+                        lastNoCorrectionFactor,
+                        lastCorrectedNO,
+                        lastNoRiskLevel,
+                        respiratoryPointCount,
+                        respiratoryDiagnosis)
+                : null;
+
+        new Thread(() -> {
+            try {
+                PhysicalExamReportService.SaveResult result = PhysicalExamReportService.save(
+                        getApplicationContext(),
+                        db,
+                        physicalExamReportId,
+                        specimenNo,
+                        gastrointestinalSection,
+                        redBloodCellSection,
+                        respiratorySection);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed()) {
+                        buttonReportManage.setEnabled(true);
+                        Toast.makeText(
+                                this,
+                                "体检诊断报告已生成：" + result.getFileName(),
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+            } catch (Exception error) {
+                physicalExamReportSaving = false;
+                reportSaveFailed("体检诊断", error);
+            }
+        }, "physical-exam-save-combined").start();
+    }
+
     private void saveGastrointestinalReport() {
         if (gastrointestinalReportId < 0) {
             return;
         }
+        List<GastrointestinalReportService.ChannelMeasurement> measurements =
+                buildGastrointestinalMeasurements();
+        boolean positive = isGastrointestinalPositive();
+        new Thread(() -> {
+            try {
+                GastrointestinalReportService.save(
+                        getApplicationContext(), db, gastrointestinalReportId, specimenNo,
+                        measurements, positive, gastrointestinalDiagnosis);
+                onReportSaved();
+            } catch (Exception error) {
+                reportSaveFailed("胃肠道", error);
+            }
+        }, "physical-exam-save-gi").start();
+    }
+
+    private List<GastrointestinalReportService.ChannelMeasurement>
+            buildGastrointestinalMeasurements() {
         List<GastrointestinalReportService.ChannelMeasurement> measurements = new ArrayList<>();
         for (ChannelData data : gastrointestinalData) {
             if (data == null) {
@@ -647,17 +736,7 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                     selectedCH4 ? data.correctedCH4() : 0f,
                     data.hasValidCorrectionFactor()));
         }
-        boolean positive = isGastrointestinalPositive();
-        new Thread(() -> {
-            try {
-                GastrointestinalReportService.save(
-                        getApplicationContext(), db, gastrointestinalReportId, specimenNo,
-                        measurements, positive, gastrointestinalDiagnosis);
-                onReportSaved();
-            } catch (Exception error) {
-                reportSaveFailed("胃肠道", error);
-            }
-        }, "physical-exam-save-gi").start();
+        return measurements;
     }
 
     private void saveRedBloodCellReport() {
@@ -666,7 +745,7 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
         }
         new Thread(() -> {
             try {
-                RedBloodCellLifespanReportService.savePhysicalExam(
+                RedBloodCellLifespanReportService.save(
                         getApplicationContext(), db, redBloodCellReportId, specimenNo,
                         lastCO, lastCO2ForRbc, lastCoCorrectionFactor, lastCorrectedCO,
                         totalHemoglobin, lastLifespanDays, redBloodCellDiagnosis);

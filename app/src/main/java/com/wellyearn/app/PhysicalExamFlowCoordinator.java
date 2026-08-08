@@ -14,6 +14,7 @@ final class PhysicalExamFlowCoordinator {
     static final String EXTRA_GASTROINTESTINAL_REPORT_ID = "gastrointestinalReportId";
     static final String EXTRA_RED_BLOOD_CELL_REPORT_ID = "redBloodCellReportId";
     static final String EXTRA_RESPIRATORY_REPORT_ID = "respiratoryReportId";
+    static final String EXTRA_PHYSICAL_EXAM_REPORT_ID = "physicalExamReportId";
 
     private PhysicalExamFlowCoordinator() {
     }
@@ -53,10 +54,25 @@ final class PhysicalExamFlowCoordinator {
             long gastrointestinalReportId,
             long redBloodCellReportId,
             long respiratoryReportId) {
+        putFlowState(
+                intent,
+                gastrointestinalReportId,
+                redBloodCellReportId,
+                respiratoryReportId,
+                -1L);
+    }
+
+    static void putFlowState(
+            Intent intent,
+            long gastrointestinalReportId,
+            long redBloodCellReportId,
+            long respiratoryReportId,
+            long physicalExamReportId) {
         intent.putExtra(EXTRA_FLOW_ENABLED, true);
         intent.putExtra(EXTRA_GASTROINTESTINAL_REPORT_ID, gastrointestinalReportId);
         intent.putExtra(EXTRA_RED_BLOOD_CELL_REPORT_ID, redBloodCellReportId);
         intent.putExtra(EXTRA_RESPIRATORY_REPORT_ID, respiratoryReportId);
+        intent.putExtra(EXTRA_PHYSICAL_EXAM_REPORT_ID, physicalExamReportId);
     }
 
     static boolean advanceAfterCompletion(
@@ -117,6 +133,8 @@ final class PhysicalExamFlowCoordinator {
                 EXTRA_RED_BLOOD_CELL_REPORT_ID, -1L);
         long respiratoryReportId = source.getLongExtra(
                 EXTRA_RESPIRATORY_REPORT_ID, -1L);
+        long physicalExamReportId = source.getLongExtra(
+                EXTRA_PHYSICAL_EXAM_REPORT_ID, -1L);
 
         Intent intent = new Intent(activity, activityFor(detection));
         intent.putExtra("patientId", source.getLongExtra("patientId", -1L));
@@ -141,7 +159,8 @@ final class PhysicalExamFlowCoordinator {
                 intent,
                 gastrointestinalReportId,
                 redBloodCellReportId,
-                respiratoryReportId);
+                respiratoryReportId,
+                physicalExamReportId);
         return intent;
     }
 
