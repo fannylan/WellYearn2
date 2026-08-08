@@ -265,6 +265,10 @@ public class Test1Activity extends AppCompatActivity {
         String interpretation = generateInterpretation();
         textResultInterpretation.setText(interpretation);
         saveReportData(interpretation);
+        PhysicalExamFlowCoordinator.advanceAfterCompletion(
+                this,
+                usbHelper,
+                PhysicalExamSelectionRouter.Detection.GASTROINTESTINAL);
     }
 
     private void updateTableStatuses() {
@@ -416,6 +420,7 @@ public class Test1Activity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null);
         super.onDestroy();
         if (usbHelper != null) usbHelper.disconnect();
     }

@@ -1,36 +1,64 @@
 package com.wellyearn.app;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertNull;
 
 import org.junit.Test;
 
 public class PhysicalExamSelectionRouterTest {
 
     @Test
-    public void onlyCoSelectsTest2FlowAndCommand() {
-        boolean coOnly = PhysicalExamSelectionRouter.isCoOnly(false, false, true, false);
+    public void firstSelectedUsesGastrointestinalCoRespiratoryPriority() {
+        assertEquals(
+                PhysicalExamSelectionRouter.Detection.GASTROINTESTINAL,
+                PhysicalExamSelectionRouter.firstSelected(true, false, true, true));
+        assertEquals(
+                PhysicalExamSelectionRouter.Detection.GASTROINTESTINAL,
+                PhysicalExamSelectionRouter.firstSelected(false, true, true, true));
+        assertEquals(
+                PhysicalExamSelectionRouter.Detection.RED_BLOOD_CELL,
+                PhysicalExamSelectionRouter.firstSelected(false, false, true, true));
+        assertEquals(
+                PhysicalExamSelectionRouter.Detection.RESPIRATORY,
+                PhysicalExamSelectionRouter.firstSelected(false, false, false, true));
+        assertNull(PhysicalExamSelectionRouter.firstSelected(false, false, false, false));
+    }
 
-        assertTrue(coOnly);
+    @Test
+    public void commandMatchesSelectedDetection() {
+        assertEquals(
+                "7E 20 00 00 00 20 7E",
+                PhysicalExamSelectionRouter.commandFor(
+                        PhysicalExamSelectionRouter.Detection.GASTROINTESTINAL));
         assertEquals(
                 "7E 30 00 00 00 30 7E",
-                PhysicalExamSelectionRouter.startCommand(coOnly));
-    }
-
-    @Test
-    public void anyAdditionalGasKeepsDefaultPhysicalExamFlow() {
-        assertFalse(PhysicalExamSelectionRouter.isCoOnly(true, false, true, false));
-        assertFalse(PhysicalExamSelectionRouter.isCoOnly(false, true, true, false));
-        assertFalse(PhysicalExamSelectionRouter.isCoOnly(false, false, true, true));
+                PhysicalExamSelectionRouter.commandFor(
+                        PhysicalExamSelectionRouter.Detection.RED_BLOOD_CELL));
         assertEquals(
-                "7E 10 00 00 00 10 7E",
-                PhysicalExamSelectionRouter.startCommand(false));
+                "7E 40 00 00 00 40 7E",
+                PhysicalExamSelectionRouter.commandFor(
+                        PhysicalExamSelectionRouter.Detection.RESPIRATORY));
     }
 
     @Test
-    public void missingCoDoesNotSelectTest2Flow() {
-        assertFalse(PhysicalExamSelectionRouter.isCoOnly(false, false, false, false));
-        assertFalse(PhysicalExamSelectionRouter.isCoOnly(true, true, false, true));
+    public void nextSelectedSkipsUnselectedTestsAndKeepsOrder() {
+        assertEquals(
+                PhysicalExamSelectionRouter.Detection.RED_BLOOD_CELL,
+                PhysicalExamSelectionRouter.nextSelected(
+                        PhysicalExamSelectionRouter.Detection.GASTROINTESTINAL,
+                        true, false, true, true));
+        assertEquals(
+                PhysicalExamSelectionRouter.Detection.RESPIRATORY,
+                PhysicalExamSelectionRouter.nextSelected(
+                        PhysicalExamSelectionRouter.Detection.GASTROINTESTINAL,
+                        false, true, false, true));
+        assertEquals(
+                PhysicalExamSelectionRouter.Detection.RESPIRATORY,
+                PhysicalExamSelectionRouter.nextSelected(
+                        PhysicalExamSelectionRouter.Detection.RED_BLOOD_CELL,
+                        false, false, true, true));
+        assertNull(PhysicalExamSelectionRouter.nextSelected(
+                PhysicalExamSelectionRouter.Detection.RESPIRATORY,
+                true, true, true, true));
     }
 }

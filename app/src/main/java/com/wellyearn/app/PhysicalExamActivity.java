@@ -115,6 +115,11 @@ public class PhysicalExamActivity extends AppCompatActivity {
                 Toast.makeText(this, "设备未就绪，请稍后", Toast.LENGTH_SHORT).show();
                 return;
             }
+            if (!chkCH4.isChecked() && !chkH2.isChecked()
+                    && !chkCO.isChecked() && !chkNO.isChecked()) {
+                Toast.makeText(this, "请至少选择一项检测", Toast.LENGTH_SHORT).show();
+                return;
+            }
             if (TextUtils.isEmpty(etSpecimenNo.getText())) {
                 Toast.makeText(this, "请输入标本编号", Toast.LENGTH_SHORT).show();
                 return;
@@ -393,7 +398,9 @@ public class PhysicalExamActivity extends AppCompatActivity {
         final boolean isH2 = chkH2.isChecked();
         final boolean isCO = chkCO.isChecked();
         final boolean isNO = chkNO.isChecked();
-        final boolean isCoOnly = PhysicalExamSelectionRouter.isCoOnly(isCH4, isH2, isCO, isNO);
+        final boolean gastrointestinalSelected = isCH4 || isH2;
+        final PhysicalExamSelectionRouter.Detection firstDetection =
+                PhysicalExamSelectionRouter.firstSelected(isCH4, isH2, isCO, isNO);
 
         new Thread(() -> {
             try {
@@ -407,44 +414,49 @@ public class PhysicalExamActivity extends AppCompatActivity {
                 patient.setCreatedTime(System.currentTimeMillis());
                 patient.setUpdatedTime(System.currentTimeMillis());
 
-                final long[] insertedIds = new long[2];
+                final long[] insertedIds = {-1L, -1L, -1L, -1L};
                 db.runInTransaction(() -> {
                     long patientId = db.patientDao().insert(patient);
-
-                    TestReport report = new TestReport();
-                    report.setPatientId(patientId);
-                    report.setTestType("体检模式");
-                    report.setTestData("");
-                    report.setDoctorName("体检科");
-                    report.setRemarks("");
-                    report.setTestDate(System.currentTimeMillis());
-                    report.setReportNumber("PH" + System.currentTimeMillis());
-                    report.setTestResult("");
-                    report.setCreatedTime(System.currentTimeMillis());
-
                     insertedIds[0] = patientId;
-                    insertedIds[1] = db.testReportDao().insert(report);
+                    if (gastrointestinalSelected) {
+                        insertedIds[1] = insertInitialReport(
+                                patientId, "胃肠道疾病检测", "GI");
+                    }
+                    if (isCO) {
+                        insertedIds[2] = insertInitialReport(
+                                patientId, "红细胞寿命检测", "RB");
+                    }
+                    if (isNO) {
+                        insertedIds[3] = insertInitialReport(
+                                patientId, "呼吸道疾病检测", "RE");
+                    }
                 });
                 final long patientId = insertedIds[0];
-                final long reportId = insertedIds[1];
+                final long gastrointestinalReportId = insertedIds[1];
+                final long redBloodCellReportId = insertedIds[2];
+                final long respiratoryReportId = insertedIds[3];
+                final long reportId = PhysicalExamFlowCoordinator.reportIdFor(
+                        firstDetection,
+                        gastrointestinalReportId,
+                        redBloodCellReportId,
+                        respiratoryReportId);
 
-                // 仅CO使用红细胞寿命检测协议，其余组合保留原体检协议。
-                String startCommand = PhysicalExamSelectionRouter.startCommand(isCoOnly);
+                String startCommand = PhysicalExamSelectionRouter.commandFor(firstDetection);
                 byte[] startCmd = hexStringToByteArray(startCommand);
-                final boolean commandSent = usbHelper.isConnected();
-                if (commandSent) {
-                    usbHelper.sendBytes(startCmd);
+                if (!usbHelper.isConnected()) {
+                    throw new IllegalStateException("USB未连接，无法发送检测指令");
                 }
+                usbHelper.sendBytes(startCmd);
+                // 释放串口后再进入检测页，由检测页负责接收本次检测数据。
+                usbHelper.disconnect();
 
-                final Class<?> targetActivity = isCoOnly
-                        ? Test2Activity.class
-                        : PhysicalExamResultActivity.class;
+                final Class<?> targetActivity =
+                        PhysicalExamFlowCoordinator.activityFor(firstDetection);
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) {
                         return;
                     }
-                    Toast.makeText(this,
-                            commandSent ? "已发送启动指令" : "USB未连接，无法发送指令",
+                    Toast.makeText(this, "已发送启动指令：" + startCommand,
                             Toast.LENGTH_SHORT).show();
 
                     Intent intent = new Intent(PhysicalExamActivity.this, targetActivity);
@@ -455,11 +467,16 @@ public class PhysicalExamActivity extends AppCompatActivity {
                     intent.putExtra("substrate", substrate);
                     intent.putExtra("patientAge", patientAge);
                     intent.putExtra("hemoglobin", totalHemoglobin);
-                    intent.putExtra(Test2Activity.EXTRA_PHYSICAL_EXAM_MODE, isCoOnly);
+                    intent.putExtra(Test2Activity.EXTRA_PHYSICAL_EXAM_MODE, true);
                     intent.putExtra("chkCH4", isCH4);
                     intent.putExtra("chkH2", isH2);
                     intent.putExtra("chkCO", isCO);
                     intent.putExtra("chkNO", isNO);
+                    PhysicalExamFlowCoordinator.putFlowState(
+                            intent,
+                            gastrointestinalReportId,
+                            redBloodCellReportId,
+                            respiratoryReportId);
 
                     startActivity(intent);
                     finish();
@@ -483,6 +500,26 @@ public class PhysicalExamActivity extends AppCompatActivity {
                 });
             }
         }, "physical-exam-save").start();
+    }
+
+    private long insertInitialReport(long patientId, String testType, String numberPrefix) {
+        long now = System.currentTimeMillis();
+        TestReport report = new TestReport();
+        report.setPatientId(patientId);
+        report.setTestType(testType);
+        report.setTestData("");
+        report.setDoctorName("体检科");
+        report.setRemarks("");
+        report.setTestDate(now);
+        report.setReportNumber(numberPrefix + now);
+        report.setTestResult("");
+        report.setPatientInfo("");
+        report.setDetectionDataChart("");
+        report.setDiagnosisResult("");
+        report.setPdfFileName("");
+        report.setPdfUri("");
+        report.setCreatedTime(now);
+        return db.testReportDao().insert(report);
     }
 
     private byte[] buildFrame(byte[] commandId, byte[] body) {

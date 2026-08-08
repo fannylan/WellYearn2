@@ -249,6 +249,10 @@ public class Test2Activity extends AppCompatActivity {
         String interpretation = generateInterpretation();
         textResultInterpretation.setText(interpretation);
         saveReportData(interpretation);
+        PhysicalExamFlowCoordinator.advanceAfterCompletion(
+                this,
+                usbHelper,
+                PhysicalExamSelectionRouter.Detection.RED_BLOOD_CELL);
     }
 
     private String generateInterpretation() {
@@ -353,6 +357,7 @@ public class Test2Activity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null);
         super.onDestroy();
         if (usbHelper != null) usbHelper.disconnect();
     }

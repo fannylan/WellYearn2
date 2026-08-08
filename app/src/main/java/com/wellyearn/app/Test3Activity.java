@@ -30,6 +30,7 @@ import com.wellyearn.app.usb.UsbSerialHelper;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -119,43 +120,81 @@ public class Test3Activity extends AppCompatActivity {
 
     private void initUsbSerial() {
         usbHelper = new UsbSerialHelper(this);
-        usbHelper.setOnDataReceivedListener(data -> {
-            parseAndUpdateData(data);
-        });
+        usbHelper.setByteDataListener(this::parseDataFrame);
         usbHelper.scanAndConnect();
     }
 
-    private void parseAndUpdateData(String data) {
-        if (data == null || data.trim().isEmpty()) return;
-        String trimmed = data.trim();
-        if (!trimmed.startsWith("{")) {
-            // 开发阶段可用模拟数据
-            if (dataPointsCount == 0) generateMockData();
+    private void parseDataFrame(byte[] data) {
+        if (data == null || data.length == 0) {
             return;
         }
+
+        String text = new String(data, StandardCharsets.UTF_8).trim();
+        if (text.startsWith("{")) {
+            parseJsonMeasurement(text);
+            return;
+        }
+
+        int start = -1;
+        int end = -1;
+        for (int i = 0; i < data.length; i++) {
+            if (data[i] == 0x7E) {
+                if (start == -1) {
+                    start = i;
+                } else {
+                    end = i;
+                    break;
+                }
+            }
+        }
+        if (start == -1 || end == -1 || end - start < 10) {
+            return;
+        }
+
+        int frameLength = end - start - 1;
+        byte[] frame = new byte[frameLength];
+        System.arraycopy(data, start + 1, frame, 0, frameLength);
+        int messageId = ((frame[0] & 0xFF) << 8) | (frame[1] & 0xFF);
+        if (messageId != 0x4000) {
+            return;
+        }
+
+        int dataLength = ((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF);
+        if (frameLength < dataLength + 1 || frameLength < 9) {
+            return;
+        }
+
+        // 消息体：状态(1) + NO(2) + CO2(2)，浓度为小端无符号数。
+        int offset = 5;
+        int no = (frame[offset + 1] & 0xFF) << 8 | (frame[offset] & 0xFF);
+        offset += 2;
+        int co2 = (frame[offset + 1] & 0xFF) << 8 | (frame[offset] & 0xFF);
+        recordMeasurement(no, co2);
+    }
+
+    private void parseJsonMeasurement(String jsonText) {
         try {
-            JSONObject json = new JSONObject(trimmed);
-            // 注意：字段名根据实际USB协议修改
+            JSONObject json = new JSONObject(jsonText);
             float no = (float) json.getDouble("no");
             float co2 = (float) json.getDouble("co2");
-
-            // 更新界面
-            runOnUiThread(() -> {
-                updateMeasurement(no, co2);
-                updateSingleChannelTable();
-                updateBarChart();
-            });
-
-            dataPointsCount++;
-            int progressPercent = Math.min(dataPointsCount * 100 / REQUIRED_POINTS, 99);
-            runOnUiThread(() -> textDetectionProgress.setText("检测中 " + progressPercent + "%"));
-
-            if (dataPointsCount >= REQUIRED_POINTS && !detectionCompleted) {
-                runOnUiThread(this::onDetectionComplete);
-            }
+            recordMeasurement(no, co2);
         } catch (JSONException e) {
-            e.printStackTrace();
+            Log.w(TAG, "无法解析呼吸道检测JSON数据", e);
         }
+    }
+
+    private void recordMeasurement(float no, float co2) {
+        updateMeasurement(no, co2);
+        int receivedPoints = ++dataPointsCount;
+        runOnUiThread(() -> {
+            updateSingleChannelTable();
+            updateBarChart();
+            int progressPercent = Math.min(receivedPoints * 100 / REQUIRED_POINTS, 100);
+            textDetectionProgress.setText("检测中 " + progressPercent + "%");
+            if (receivedPoints >= REQUIRED_POINTS && !detectionCompleted) {
+                onDetectionComplete();
+            }
+        });
     }
 
     private void updateMeasurement(float no, float co2) {
@@ -248,6 +287,10 @@ public class Test3Activity extends AppCompatActivity {
         String interpretation = generateInterpretation();
         textResultInterpretation.setText(interpretation);
         saveReportData(interpretation);
+        PhysicalExamFlowCoordinator.advanceAfterCompletion(
+                this,
+                usbHelper,
+                PhysicalExamSelectionRouter.Detection.RESPIRATORY);
     }
 
     private String generateInterpretation() {
@@ -318,29 +361,6 @@ public class Test3Activity extends AppCompatActivity {
         }
     }
 
-    private void generateMockData() {
-        // 模拟10个数据点，用于调试
-        for (int i = 0; i < REQUIRED_POINTS; i++) {
-            float no = (float) (10 + Math.random() * 50);
-            float co2 = (float) (350 + Math.random() * 250);
-            final int index = i;
-            runOnUiThread(() -> {
-                updateMeasurement(no, co2);
-                updateSingleChannelTable();
-                updateBarChart();
-                int progress = (index + 1) * 100 / REQUIRED_POINTS;
-                textDetectionProgress.setText("检测中 " + progress + "%");
-                if (index + 1 == REQUIRED_POINTS) onDetectionComplete();
-            });
-            dataPointsCount++;
-            try {
-                Thread.sleep(100);
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-        }
-    }
-
     private void updateCurrentTime() {
         SimpleDateFormat sdf = new SimpleDateFormat("HH:mm:ss", Locale.CHINA);
         textCurrentTime.setText("时间：" + sdf.format(new Date()));
@@ -349,6 +369,7 @@ public class Test3Activity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        mainHandler.removeCallbacksAndMessages(null);
         super.onDestroy();
         if (usbHelper != null) usbHelper.disconnect();
     }
