@@ -450,8 +450,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
                 // 释放串口后再进入检测页，由检测页负责接收本次检测数据。
                 usbHelper.disconnect();
 
-                final Class<?> targetActivity =
-                        PhysicalExamFlowCoordinator.activityFor(firstDetection);
+                final Class<?> targetActivity = PhysicalExamResultActivity.class;
                 runOnUiThread(() -> {
                     if (isFinishing() || isDestroyed()) {
                         return;
