@@ -59,6 +59,8 @@ public class PhysicalExamActivity extends AppCompatActivity {
 
     private static final int POLL_TIMEOUT_MS = 5000;
     private static final int CAMERA_PERMISSION_REQUEST = 100;
+    private static final String START_EXAM_TEXT = "开始体检";
+    private static final String STARTING_EXAM_TEXT = "正在启动...";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -214,10 +216,28 @@ public class PhysicalExamActivity extends AppCompatActivity {
         }
     }
 
-    private void parseAndFillPatientInfo(String jsonStr) {
+    private void parseAndFillPatientInfo(String scanText) {
+        String scanValue = scanText == null ? "" : scanText.trim();
+        if (scanValue.isEmpty()) {
+            return;
+        }
+
+        // 普通条码直接作为标本编号；JSON 二维码则同时填充患者信息。
+        if (!scanValue.startsWith("{")) {
+            etSpecimenNo.setText(scanValue);
+            return;
+        }
+
         try {
-            JSONObject json = new JSONObject(jsonStr);
-            etSpecimenNo.setText(json.optString("specimenNo", ""));
+            JSONObject json = new JSONObject(scanValue);
+            String specimenNo = json.optString("specimenNo", "").trim();
+            if (specimenNo.isEmpty()) {
+                specimenNo = json.optString("barcode", "").trim();
+            }
+            if (specimenNo.isEmpty()) {
+                specimenNo = json.optString("specimenCode", "").trim();
+            }
+            etSpecimenNo.setText(specimenNo.isEmpty() ? scanValue : specimenNo);
             etName.setText(json.optString("name", ""));
             String gender = json.optString("gender", "");
             if (!gender.isEmpty()) {
@@ -233,8 +253,9 @@ public class PhysicalExamActivity extends AppCompatActivity {
             etHemoglobin.setText(json.optString("hemoglobin", ""));
             etPhone.setText(json.optString("phone", ""));
         } catch (JSONException e) {
-            e.printStackTrace();
-            Toast.makeText(this, "二维码格式错误，请手动输入", Toast.LENGTH_SHORT).show();
+            Log.w("PhysicalExam", "Failed to parse scanned patient JSON", e);
+            etSpecimenNo.setText(scanValue);
+            Toast.makeText(this, "已将扫码内容填入标本编号，请补充患者信息", Toast.LENGTH_SHORT).show();
         }
     }
 
@@ -277,8 +298,11 @@ public class PhysicalExamActivity extends AppCompatActivity {
 
             if (ready) {
                 isDeviceReady = true;
-                btnStartExam.setEnabled(true);
-                btnStartExam.setBackgroundTintList(android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50")));
+                if (!isExamStarted) {
+                    btnStartExam.setEnabled(true);
+                    btnStartExam.setBackgroundTintList(
+                            android.content.res.ColorStateList.valueOf(Color.parseColor("#4CAF50")));
+                }
             } else {
                 isDeviceReady = false;
                 btnStartExam.setEnabled(false);
@@ -305,70 +329,111 @@ public class PhysicalExamActivity extends AppCompatActivity {
         }
 
         isExamStarted = true;
-        String gender = spGender.getSelectedItem().toString();
-        String substrate = spSubstrate.getSelectedItem().toString();
+        btnStartExam.setEnabled(false);
+        btnStartExam.setText(STARTING_EXAM_TEXT);
+        btnStartExam.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(Color.GRAY));
+
+        final String patientName = etName.getText().toString().trim();
+        final String phone = etPhone.getText().toString().trim();
+        final String specimenNo = etSpecimenNo.getText().toString().trim();
+        final String gender = spGender.getSelectedItem().toString();
+        final String substrate = spSubstrate.getSelectedItem().toString();
         // 获取复选框状态
-        boolean isCH4 = chkCH4.isChecked();
-        boolean isH2 = chkH2.isChecked();
-        boolean isCO = chkCO.isChecked();
-        boolean isNO = chkNO.isChecked();
-        boolean isCoOnly = PhysicalExamSelectionRouter.isCoOnly(isCH4, isH2, isCO, isNO);
+        final boolean isCH4 = chkCH4.isChecked();
+        final boolean isH2 = chkH2.isChecked();
+        final boolean isCO = chkCO.isChecked();
+        final boolean isNO = chkNO.isChecked();
+        final boolean isCoOnly = PhysicalExamSelectionRouter.isCoOnly(isCH4, isH2, isCO, isNO);
 
-        Patient patient = new Patient();
-        patient.setName(etName.getText().toString());
-        patient.setGender(gender);
-        patient.setAge(patientAge);
-        patient.setPhone(etPhone.getText().toString());
-        patient.setIdCard("");
-        patient.setPatientType("体检模式");
-        patient.setCreatedTime(System.currentTimeMillis());
-        patient.setUpdatedTime(System.currentTimeMillis());
+        new Thread(() -> {
+            try {
+                Patient patient = new Patient();
+                patient.setName(patientName);
+                patient.setGender(gender);
+                patient.setAge(patientAge);
+                patient.setPhone(phone);
+                patient.setIdCard("");
+                patient.setPatientType("体检模式");
+                patient.setCreatedTime(System.currentTimeMillis());
+                patient.setUpdatedTime(System.currentTimeMillis());
 
-        long patientId = db.patientDao().insert(patient);
+                final long[] insertedIds = new long[2];
+                db.runInTransaction(() -> {
+                    long patientId = db.patientDao().insert(patient);
 
-        TestReport report = new TestReport();
-        report.setPatientId(patientId);
-        report.setTestType("体检模式");
-        report.setTestData("");
-        report.setDoctorName("体检科");
-        report.setRemarks("");
-        report.setTestDate(System.currentTimeMillis());
-        report.setReportNumber("PH" + System.currentTimeMillis());
-        report.setTestResult("");
-        report.setCreatedTime(System.currentTimeMillis());
+                    TestReport report = new TestReport();
+                    report.setPatientId(patientId);
+                    report.setTestType("体检模式");
+                    report.setTestData("");
+                    report.setDoctorName("体检科");
+                    report.setRemarks("");
+                    report.setTestDate(System.currentTimeMillis());
+                    report.setReportNumber("PH" + System.currentTimeMillis());
+                    report.setTestResult("");
+                    report.setCreatedTime(System.currentTimeMillis());
 
-        long reportId = db.testReportDao().insert(report);
+                    insertedIds[0] = patientId;
+                    insertedIds[1] = db.testReportDao().insert(report);
+                });
+                final long patientId = insertedIds[0];
+                final long reportId = insertedIds[1];
 
-        // 仅CO使用红细胞寿命检测协议，其余组合保留原体检协议。
-        String startCommand = PhysicalExamSelectionRouter.startCommand(isCoOnly);
-        byte[] startCmd = hexStringToByteArray(startCommand);
-        if (usbHelper.isConnected()) {
-            usbHelper.sendBytes(startCmd);
-            Toast.makeText(this, "已发送启动指令", Toast.LENGTH_SHORT).show();
-        } else {
-            Toast.makeText(this, "USB未连接，无法发送指令", Toast.LENGTH_SHORT).show();
-        }
+                // 仅CO使用红细胞寿命检测协议，其余组合保留原体检协议。
+                String startCommand = PhysicalExamSelectionRouter.startCommand(isCoOnly);
+                byte[] startCmd = hexStringToByteArray(startCommand);
+                final boolean commandSent = usbHelper.isConnected();
+                if (commandSent) {
+                    usbHelper.sendBytes(startCmd);
+                }
 
-        Class<?> targetActivity = isCoOnly
-                ? Test2Activity.class
-                : PhysicalExamResultActivity.class;
-        Intent intent = new Intent(PhysicalExamActivity.this, targetActivity);
-        intent.putExtra("patientId", patientId);
-        intent.putExtra("reportId", reportId);
-        intent.putExtra("patientName", patient.getName());
-        intent.putExtra("specimenNo", etSpecimenNo.getText().toString());
-        intent.putExtra("substrate", substrate);
-        intent.putExtra("patientAge", patientAge);
-        intent.putExtra("hemoglobin", totalHemoglobin);
-        intent.putExtra(Test2Activity.EXTRA_PHYSICAL_EXAM_MODE, isCoOnly);
-        // 传递复选框状态
-        intent.putExtra("chkCH4", isCH4);
-        intent.putExtra("chkH2", isH2);
-        intent.putExtra("chkCO", isCO);
-        intent.putExtra("chkNO", isNO);
+                final Class<?> targetActivity = isCoOnly
+                        ? Test2Activity.class
+                        : PhysicalExamResultActivity.class;
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    Toast.makeText(this,
+                            commandSent ? "已发送启动指令" : "USB未连接，无法发送指令",
+                            Toast.LENGTH_SHORT).show();
 
-        startActivity(intent);
-        finish();
+                    Intent intent = new Intent(PhysicalExamActivity.this, targetActivity);
+                    intent.putExtra("patientId", patientId);
+                    intent.putExtra("reportId", reportId);
+                    intent.putExtra("patientName", patientName);
+                    intent.putExtra("specimenNo", specimenNo);
+                    intent.putExtra("substrate", substrate);
+                    intent.putExtra("patientAge", patientAge);
+                    intent.putExtra("hemoglobin", totalHemoglobin);
+                    intent.putExtra(Test2Activity.EXTRA_PHYSICAL_EXAM_MODE, isCoOnly);
+                    intent.putExtra("chkCH4", isCH4);
+                    intent.putExtra("chkH2", isH2);
+                    intent.putExtra("chkCO", isCO);
+                    intent.putExtra("chkNO", isNO);
+
+                    startActivity(intent);
+                    finish();
+                });
+            } catch (Exception e) {
+                Log.e("PhysicalExam", "Failed to save and start physical exam", e);
+                runOnUiThread(() -> {
+                    if (isFinishing() || isDestroyed()) {
+                        return;
+                    }
+                    isExamStarted = false;
+                    btnStartExam.setText(START_EXAM_TEXT);
+                    btnStartExam.setEnabled(isDeviceReady);
+                    btnStartExam.setBackgroundTintList(
+                            android.content.res.ColorStateList.valueOf(
+                                    isDeviceReady ? Color.parseColor("#4CAF50") : Color.GRAY));
+                    String message = e.getMessage();
+                    Toast.makeText(this,
+                            "体检启动失败" + (TextUtils.isEmpty(message) ? "" : "：" + message),
+                            Toast.LENGTH_LONG).show();
+                });
+            }
+        }, "physical-exam-save").start();
     }
 
     private byte[] buildFrame(byte[] commandId, byte[] body) {
