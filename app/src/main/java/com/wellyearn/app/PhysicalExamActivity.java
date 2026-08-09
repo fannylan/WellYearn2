@@ -341,10 +341,10 @@ public class PhysicalExamActivity extends AppCompatActivity {
             boolean ready = false;
             switch (status) {
                 case 0: statusText = "初始化中"; color = Color.GRAY; break;
-                case 1: statusText = "空闲已就位"; color = Color.GREEN; ready = true; break;
+                case 4: statusText = "空闲已就位"; color = Color.GREEN; ready = true; break;
                 case 2: statusText = "检测中"; color = Color.parseColor("#9C27B0"); break;
                 case 3: statusText = "校准中"; color = Color.parseColor("#FFEB3B"); break;
-                case 4: statusText = "故障"; color = Color.RED; break;
+                case 1: statusText = "故障"; color = Color.RED; break;
                 default: statusText = "未知"; color = Color.GRAY;
             }
             tvDeviceStatus.setText("设备状态：" + statusText);

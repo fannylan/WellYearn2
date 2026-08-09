@@ -229,10 +229,10 @@ public class MainActivity extends AppCompatActivity {
     private String getStatusText(int status) {
         switch (status) {
             case 0: return "初始化中";
-            case 1: return "空闲已就位";
+            case 4: return "空闲已就位";
             case 2: return "检测中";
             case 3: return "校准中";
-            case 4: return "故障";
+            case 1: return "故障";
             default: return "未知";
         }
     }
