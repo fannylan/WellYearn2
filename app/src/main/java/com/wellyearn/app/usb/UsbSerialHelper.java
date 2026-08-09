@@ -34,6 +34,7 @@ public class UsbSerialHelper {
     private OnDataReceivedListener dataListener;
     private OnDeviceReadyListener readyListener;
     private ByteDataListener byteDataListener;
+    private OnConnectedListener connectedListener;
 
     private boolean isConnected = false;
     private String receivedData = "";
@@ -49,6 +50,10 @@ public class UsbSerialHelper {
 
     public interface ByteDataListener {
         void onByteDataReceived(byte[] data);
+    }
+
+    public interface OnConnectedListener {
+        void onConnected();
     }
 
     public UsbSerialHelper(Context context) {
@@ -172,6 +177,9 @@ public class UsbSerialHelper {
 
             ioManager.start();
             Log.d(TAG, "USB串口连接成功");
+            if (connectedListener != null) {
+                connectedListener.onConnected();
+            }
 
         } catch (IOException e) {
             Log.e(TAG, "连接USB设备失败", e);
@@ -244,6 +252,13 @@ public class UsbSerialHelper {
 
     public void setByteDataListener(ByteDataListener listener) {
         this.byteDataListener = listener;
+    }
+
+    public void setOnConnectedListener(OnConnectedListener listener) {
+        this.connectedListener = listener;
+        if (listener != null && isConnected) {
+            listener.onConnected();
+        }
     }
 
     public boolean isConnected() {

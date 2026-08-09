@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.TableLayout;
@@ -39,8 +40,9 @@ import java.util.Locale;
 
 public class Test3Activity extends AppCompatActivity {
 
+    public static final String EXTRA_START_COMMAND = "startDetectionCommand";
     private static final String TAG = "Test3Activity";
-    private static final int REQUIRED_POINTS = 10;
+    private static final int REQUIRED_POINTS = 1;
 
     private TextView textCurrentTime, textSpecimenNo, textPatientName;
     private TextView textDetectionProgress;
@@ -65,6 +67,8 @@ public class Test3Activity extends AppCompatActivity {
     private boolean detectionCompleted = false;
     private String generatedPdfUri;
     private int dataPointsCount = 0;
+    private final SerialFrameAccumulator frameAccumulator = new SerialFrameAccumulator();
+    private boolean startCommandSent;
 
     private Handler mainHandler = new Handler(Looper.getMainLooper());
 
@@ -121,7 +125,21 @@ public class Test3Activity extends AppCompatActivity {
     private void initUsbSerial() {
         usbHelper = new UsbSerialHelper(this);
         usbHelper.setByteDataListener(this::parseDataFrame);
+        usbHelper.setOnConnectedListener(this::sendPendingStartCommand);
         usbHelper.scanAndConnect();
+    }
+
+    private void sendPendingStartCommand() {
+        String command = getIntent().getStringExtra(EXTRA_START_COMMAND);
+        if (TextUtils.isEmpty(command) || startCommandSent) {
+            return;
+        }
+        startCommandSent = true;
+        new Thread(() -> {
+            usbHelper.sendBytes(hexStringToByteArray(command));
+            runOnUiThread(() -> Toast.makeText(
+                    this, "已发送呼吸道检测指令：" + command, Toast.LENGTH_SHORT).show());
+        }, "respiratory-start-command").start();
     }
 
     private void parseDataFrame(byte[] data) {
@@ -135,6 +153,12 @@ public class Test3Activity extends AppCompatActivity {
             return;
         }
 
+        for (byte[] frame : frameAccumulator.append(data)) {
+            parseBinaryFrame(frame);
+        }
+    }
+
+    private void parseBinaryFrame(byte[] data) {
         int start = -1;
         int end = -1;
         for (int i = 0; i < data.length; i++) {
@@ -184,6 +208,9 @@ public class Test3Activity extends AppCompatActivity {
     }
 
     private void recordMeasurement(float no, float co2) {
+        if (detectionCompleted) {
+            return;
+        }
         updateMeasurement(no, co2);
         int receivedPoints = ++dataPointsCount;
         runOnUiThread(() -> {
@@ -372,5 +399,14 @@ public class Test3Activity extends AppCompatActivity {
         mainHandler.removeCallbacksAndMessages(null);
         super.onDestroy();
         if (usbHelper != null) usbHelper.disconnect();
+    }
+
+    private byte[] hexStringToByteArray(String value) {
+        String[] hex = value.split(" ");
+        byte[] bytes = new byte[hex.length];
+        for (int index = 0; index < hex.length; index++) {
+            bytes[index] = (byte) Integer.parseInt(hex[index], 16);
+        }
+        return bytes;
     }
 }

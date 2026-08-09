@@ -48,6 +48,7 @@ public class DetectAnalysisActivity extends AppCompatActivity {
     private UsbSerialHelper usbHelper;
     private JSONObject currentPatientJson;
     private boolean isScanned = false;
+    private volatile boolean usbHandedOff;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -291,14 +292,27 @@ public class DetectAnalysisActivity extends AppCompatActivity {
 
             long reportId = db.testReportDao().insert(report);
 
-            // 发送USB指令
-            if (usbHelper != null && usbHelper.isConnected()) {
+            boolean commandWillBeSentByResultPage = targetClass == Test3Activity.class;
+            boolean commandSent = false;
+            if (commandWillBeSentByResultPage) {
+                if (usbHelper != null) {
+                    usbHelper.disconnect();
+                }
+                usbHandedOff = true;
+            } else if (usbHelper != null && usbHelper.isConnected()) {
                 byte[] cmd = hexStringToByteArray(hexCmd);
                 usbHelper.sendBytes(cmd);
+                commandSent = true;
             }
+            final boolean sourceCommandSent = commandSent;
 
             runOnUiThread(() -> {
-                if (usbHelper != null && usbHelper.isConnected()) {
+                if (commandWillBeSentByResultPage) {
+                    Toast.makeText(
+                            DetectAnalysisActivity.this,
+                            "正在进入呼吸道检测，串口连接后发送指令",
+                            Toast.LENGTH_SHORT).show();
+                } else if (sourceCommandSent) {
                     Toast.makeText(DetectAnalysisActivity.this, "已发送指令：" + hexCmd, Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(DetectAnalysisActivity.this, "USB未连接，无法发送指令", Toast.LENGTH_SHORT).show();
@@ -313,6 +327,9 @@ public class DetectAnalysisActivity extends AppCompatActivity {
                 intent.putExtra("patientAge", age);
                 intent.putExtra("substrate", substrate);
                 intent.putExtra("hemoglobin", hemoglobin);
+                if (commandWillBeSentByResultPage) {
+                    intent.putExtra(Test3Activity.EXTRA_START_COMMAND, hexCmd);
+                }
                 startActivity(intent);
             });
         }).start();
@@ -325,6 +342,15 @@ public class DetectAnalysisActivity extends AppCompatActivity {
             bytes[i] = (byte) Integer.parseInt(parts[i], 16);
         }
         return bytes;
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if (usbHandedOff) {
+            usbHandedOff = false;
+            initUsbSerial();
+        }
     }
 
     @Override

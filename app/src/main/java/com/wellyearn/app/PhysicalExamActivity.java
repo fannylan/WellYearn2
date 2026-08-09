@@ -424,12 +424,10 @@ public class PhysicalExamActivity extends AppCompatActivity {
                 final long physicalExamReportId = insertedIds[1];
 
                 String startCommand = PhysicalExamSelectionRouter.commandFor(firstDetection);
-                byte[] startCmd = hexStringToByteArray(startCommand);
                 if (!usbHelper.isConnected()) {
                     throw new IllegalStateException("USB未连接，无法发送检测指令");
                 }
-                usbHelper.sendBytes(startCmd);
-                // 释放串口后再进入检测页，由检测页负责接收本次检测数据。
+                // 检测结果页建立监听并重新连接串口后再发送启动指令，避免丢失即时回包。
                 usbHelper.disconnect();
 
                 final Class<?> targetActivity = PhysicalExamResultActivity.class;
@@ -437,7 +435,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
                     if (isFinishing() || isDestroyed()) {
                         return;
                     }
-                    Toast.makeText(this, "已发送启动指令：" + startCommand,
+                    Toast.makeText(this, "正在进入检测页，连接后发送指令：" + startCommand,
                             Toast.LENGTH_SHORT).show();
 
                     Intent intent = new Intent(PhysicalExamActivity.this, targetActivity);
@@ -453,6 +451,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
                     intent.putExtra("chkH2", isH2);
                     intent.putExtra("chkCO", isCO);
                     intent.putExtra("chkNO", isNO);
+                    intent.putExtra(PhysicalExamResultActivity.EXTRA_START_COMMAND, startCommand);
                     PhysicalExamFlowCoordinator.putFlowState(intent, physicalExamReportId);
 
                     startActivity(intent);
@@ -538,15 +537,6 @@ public class PhysicalExamActivity extends AppCompatActivity {
             }
         }
         return baos.toByteArray();
-    }
-
-    private byte[] hexStringToByteArray(String s) {
-        String[] hex = s.split(" ");
-        byte[] bytes = new byte[hex.length];
-        for (int i = 0; i < hex.length; i++) {
-            bytes[i] = (byte) Integer.parseInt(hex[i], 16);
-        }
-        return bytes;
     }
 
     @Override

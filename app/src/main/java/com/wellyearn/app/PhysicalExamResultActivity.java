@@ -5,6 +5,7 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.TextUtils;
 import android.util.Log;
 import android.widget.Button;
 import android.widget.TableLayout;
@@ -40,9 +41,10 @@ import java.util.Locale;
 /** Combined result screen for the ordered physical-exam detection flow. */
 public class PhysicalExamResultActivity extends AppCompatActivity {
 
+    public static final String EXTRA_START_COMMAND = "physicalExamStartCommand";
     private static final String TAG = "PhysicalExamResult";
     private static final int GASTROINTESTINAL_CHANNEL_COUNT = 8;
-    private static final int RESPIRATORY_REQUIRED_POINTS = 10;
+    private static final int RESPIRATORY_REQUIRED_POINTS = 1;
     private static final float GROUP_SPACE = 0.2f;
     private static final float BAR_SPACE = 0.05f;
     private static final float BAR_WIDTH = 0.35f;
@@ -64,6 +66,7 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private final ChannelData[] gastrointestinalData =
             new ChannelData[GASTROINTESTINAL_CHANNEL_COUNT];
+    private final SerialFrameAccumulator frameAccumulator = new SerialFrameAccumulator();
 
     private UsbSerialHelper usbHelper;
     private AppDatabase db;
@@ -81,6 +84,7 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
     private boolean redBloodCellCompleted;
     private boolean respiratoryCompleted;
     private boolean physicalExamReportSaving;
+    private boolean initialCommandSent;
     private int gastrointestinalChannelCount;
     private int respiratoryPointCount;
     private PhysicalExamSelectionRouter.Detection currentDetection;
@@ -220,7 +224,21 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
             runOnUiThread(() -> textReceivedData.setText("接收数据：" + hex));
             parseIncomingData(data);
         });
+        usbHelper.setOnConnectedListener(this::sendInitialCommand);
         usbHelper.scanAndConnect();
+    }
+
+    private void sendInitialCommand() {
+        String command = getIntent().getStringExtra(EXTRA_START_COMMAND);
+        if (TextUtils.isEmpty(command) || initialCommandSent) {
+            return;
+        }
+        initialCommandSent = true;
+        new Thread(() -> {
+            usbHelper.sendBytes(hexStringToByteArray(command));
+            runOnUiThread(() -> Toast.makeText(
+                    this, "已发送检测指令：" + command, Toast.LENGTH_SHORT).show());
+        }, "physical-exam-start-command").start();
     }
 
     private void parseIncomingData(byte[] data) {
@@ -233,10 +251,15 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
             return;
         }
 
-        ProtocolFrame frame = ProtocolFrame.from(data);
-        if (frame == null) {
-            return;
+        for (byte[] rawFrame : frameAccumulator.append(data)) {
+            ProtocolFrame frame = ProtocolFrame.from(rawFrame);
+            if (frame != null) {
+                dispatchProtocolFrame(frame);
+            }
         }
+    }
+
+    private void dispatchProtocolFrame(ProtocolFrame frame) {
         if (frame.messageId == 0x2000) {
             parseGastrointestinalFrame(frame.payload);
         } else if (frame.messageId == 0x3000) {
