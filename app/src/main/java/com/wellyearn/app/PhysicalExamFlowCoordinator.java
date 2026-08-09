@@ -62,6 +62,10 @@ final class PhysicalExamFlowCoordinator {
                 -1L);
     }
 
+    static void putFlowState(Intent intent, long physicalExamReportId) {
+        putFlowState(intent, -1L, -1L, -1L, physicalExamReportId);
+    }
+
     static void putFlowState(
             Intent intent,
             long gastrointestinalReportId,

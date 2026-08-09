@@ -23,10 +23,8 @@ import com.github.mikephil.charting.data.BarDataSet;
 import com.github.mikephil.charting.data.BarEntry;
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter;
 import com.wellyearn.app.database.AppDatabase;
-import com.wellyearn.app.report.AirwayInflammationReportService;
 import com.wellyearn.app.report.GastrointestinalReportService;
 import com.wellyearn.app.report.PhysicalExamReportService;
-import com.wellyearn.app.report.RedBloodCellLifespanReportService;
 import com.wellyearn.app.usb.UsbSerialHelper;
 
 import org.json.JSONException;
@@ -69,9 +67,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
 
     private UsbSerialHelper usbHelper;
     private AppDatabase db;
-    private long gastrointestinalReportId;
-    private long redBloodCellReportId;
-    private long respiratoryReportId;
     private long physicalExamReportId;
     private String patientName;
     private String specimenNo;
@@ -119,12 +114,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
         selectedH2 = intent.getBooleanExtra("chkH2", false);
         selectedCO = intent.getBooleanExtra("chkCO", false);
         selectedNO = intent.getBooleanExtra("chkNO", false);
-        gastrointestinalReportId = intent.getLongExtra(
-                PhysicalExamFlowCoordinator.EXTRA_GASTROINTESTINAL_REPORT_ID, -1L);
-        redBloodCellReportId = intent.getLongExtra(
-                PhysicalExamFlowCoordinator.EXTRA_RED_BLOOD_CELL_REPORT_ID, -1L);
-        respiratoryReportId = intent.getLongExtra(
-                PhysicalExamFlowCoordinator.EXTRA_RESPIRATORY_REPORT_ID, -1L);
         physicalExamReportId = intent.getLongExtra(
                 PhysicalExamFlowCoordinator.EXTRA_PHYSICAL_EXAM_REPORT_ID, -1L);
         currentDetection = PhysicalExamSelectionRouter.firstSelected(
@@ -509,7 +498,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                         ? "小肠细菌过度生长（SIBO）阳性。"
                         : "小肠细菌过度生长（SIBO）阴性。");
         updateDiagnosisText();
-        saveGastrointestinalReport();
         startNextDetection(PhysicalExamSelectionRouter.Detection.GASTROINTESTINAL);
     }
 
@@ -530,7 +518,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                     RedBloodCellLifespanCalculator.diagnosis(lastLifespanDays));
         }
         updateDiagnosisText();
-        saveRedBloodCellReport();
         startNextDetection(PhysicalExamSelectionRouter.Detection.RED_BLOOD_CELL);
     }
 
@@ -544,7 +531,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                 : AirwayInflammationDiagnosisRules.riskLabel(lastNoRiskLevel) + "；"
                         + AirwayInflammationDiagnosisRules.diagnosis(lastNoRiskLevel);
         updateDiagnosisText();
-        saveRespiratoryReport();
         startNextDetection(PhysicalExamSelectionRouter.Detection.RESPIRATORY);
     }
 
@@ -699,25 +685,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
         }, "physical-exam-save-combined").start();
     }
 
-    private void saveGastrointestinalReport() {
-        if (gastrointestinalReportId < 0) {
-            return;
-        }
-        List<GastrointestinalReportService.ChannelMeasurement> measurements =
-                buildGastrointestinalMeasurements();
-        boolean positive = isGastrointestinalPositive();
-        new Thread(() -> {
-            try {
-                GastrointestinalReportService.save(
-                        getApplicationContext(), db, gastrointestinalReportId, specimenNo,
-                        measurements, positive, gastrointestinalDiagnosis);
-                onReportSaved();
-            } catch (Exception error) {
-                reportSaveFailed("胃肠道", error);
-            }
-        }, "physical-exam-save-gi").start();
-    }
-
     private List<GastrointestinalReportService.ChannelMeasurement>
             buildGastrointestinalMeasurements() {
         List<GastrointestinalReportService.ChannelMeasurement> measurements = new ArrayList<>();
@@ -737,49 +704,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                     data.hasValidCorrectionFactor()));
         }
         return measurements;
-    }
-
-    private void saveRedBloodCellReport() {
-        if (redBloodCellReportId < 0) {
-            return;
-        }
-        new Thread(() -> {
-            try {
-                RedBloodCellLifespanReportService.save(
-                        getApplicationContext(), db, redBloodCellReportId, specimenNo,
-                        lastCO, lastCO2ForRbc, lastCoCorrectionFactor, lastCorrectedCO,
-                        totalHemoglobin, lastLifespanDays, redBloodCellDiagnosis);
-                onReportSaved();
-            } catch (Exception error) {
-                reportSaveFailed("红细胞寿命", error);
-            }
-        }, "physical-exam-save-rbc").start();
-    }
-
-    private void saveRespiratoryReport() {
-        if (respiratoryReportId < 0) {
-            return;
-        }
-        new Thread(() -> {
-            try {
-                AirwayInflammationReportService.save(
-                        getApplicationContext(), db, respiratoryReportId, specimenNo,
-                        patientAge, lastNO, lastCO2ForNo, lastNoCorrectionFactor,
-                        lastCorrectedNO, lastNoRiskLevel, respiratoryPointCount,
-                        respiratoryDiagnosis);
-                onReportSaved();
-            } catch (Exception error) {
-                reportSaveFailed("呼吸道", error);
-            }
-        }, "physical-exam-save-no").start();
-    }
-
-    private void onReportSaved() {
-        runOnUiThread(() -> {
-            if (!isFinishing() && !isDestroyed()) {
-                buttonReportManage.setEnabled(true);
-            }
-        });
     }
 
     private void reportSaveFailed(String testName, Exception error) {

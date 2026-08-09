@@ -4,7 +4,8 @@ final class PhysicalExamSelectionRouter {
 
     static final String GASTROINTESTINAL_COMMAND = "7E 20 00 00 00 20 7E";
     static final String RED_BLOOD_CELL_COMMAND = "7E 30 00 00 00 30 7E";
-    static final String RESPIRATORY_COMMAND = "7E 40 00 00 00 40 7E";
+    // Physical-exam NO testing uses the original combined-exam start command.
+    static final String RESPIRATORY_COMMAND = "7E 10 00 00 00 10 7E";
 
     enum Detection {
         GASTROINTESTINAL,

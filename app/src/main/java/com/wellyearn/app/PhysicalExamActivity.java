@@ -398,7 +398,6 @@ public class PhysicalExamActivity extends AppCompatActivity {
         final boolean isH2 = chkH2.isChecked();
         final boolean isCO = chkCO.isChecked();
         final boolean isNO = chkNO.isChecked();
-        final boolean gastrointestinalSelected = isCH4 || isH2;
         final PhysicalExamSelectionRouter.Detection firstDetection =
                 PhysicalExamSelectionRouter.firstSelected(isCH4, isH2, isCO, isNO);
 
@@ -414,35 +413,15 @@ public class PhysicalExamActivity extends AppCompatActivity {
                 patient.setCreatedTime(System.currentTimeMillis());
                 patient.setUpdatedTime(System.currentTimeMillis());
 
-                final long[] insertedIds = {-1L, -1L, -1L, -1L, -1L};
+                final long[] insertedIds = {-1L, -1L};
                 db.runInTransaction(() -> {
                     long patientId = db.patientDao().insert(patient);
                     insertedIds[0] = patientId;
-                    if (gastrointestinalSelected) {
-                        insertedIds[1] = insertInitialReport(
-                                patientId, "胃肠道疾病检测", "GI");
-                    }
-                    if (isCO) {
-                        insertedIds[2] = insertInitialReport(
-                                patientId, "红细胞寿命检测", "RB");
-                    }
-                    if (isNO) {
-                        insertedIds[3] = insertInitialReport(
-                                patientId, "呼吸道疾病检测", "RE");
-                    }
-                    insertedIds[4] = insertInitialReport(
+                    insertedIds[1] = insertInitialReport(
                             patientId, "体检诊断报告", "PE");
                 });
                 final long patientId = insertedIds[0];
-                final long gastrointestinalReportId = insertedIds[1];
-                final long redBloodCellReportId = insertedIds[2];
-                final long respiratoryReportId = insertedIds[3];
-                final long physicalExamReportId = insertedIds[4];
-                final long reportId = PhysicalExamFlowCoordinator.reportIdFor(
-                        firstDetection,
-                        gastrointestinalReportId,
-                        redBloodCellReportId,
-                        respiratoryReportId);
+                final long physicalExamReportId = insertedIds[1];
 
                 String startCommand = PhysicalExamSelectionRouter.commandFor(firstDetection);
                 byte[] startCmd = hexStringToByteArray(startCommand);
@@ -463,7 +442,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
 
                     Intent intent = new Intent(PhysicalExamActivity.this, targetActivity);
                     intent.putExtra("patientId", patientId);
-                    intent.putExtra("reportId", reportId);
+                    intent.putExtra("reportId", physicalExamReportId);
                     intent.putExtra("patientName", patientName);
                     intent.putExtra("specimenNo", specimenNo);
                     intent.putExtra("substrate", substrate);
@@ -474,12 +453,7 @@ public class PhysicalExamActivity extends AppCompatActivity {
                     intent.putExtra("chkH2", isH2);
                     intent.putExtra("chkCO", isCO);
                     intent.putExtra("chkNO", isNO);
-                    PhysicalExamFlowCoordinator.putFlowState(
-                            intent,
-                            gastrointestinalReportId,
-                            redBloodCellReportId,
-                            respiratoryReportId,
-                            physicalExamReportId);
+                    PhysicalExamFlowCoordinator.putFlowState(intent, physicalExamReportId);
 
                     startActivity(intent);
                     finish();
