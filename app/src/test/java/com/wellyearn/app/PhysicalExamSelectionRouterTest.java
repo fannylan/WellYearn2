@@ -35,7 +35,7 @@ public class PhysicalExamSelectionRouterTest {
                 PhysicalExamSelectionRouter.commandFor(
                         PhysicalExamSelectionRouter.Detection.RED_BLOOD_CELL));
         assertEquals(
-                "7E 10 00 00 00 10 7E",
+                "7E 40 00 00 00 40 7E",
                 PhysicalExamSelectionRouter.commandFor(
                         PhysicalExamSelectionRouter.Detection.RESPIRATORY));
     }
