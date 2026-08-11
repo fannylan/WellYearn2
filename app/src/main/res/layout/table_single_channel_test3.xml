@@ -26,24 +26,6 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="CO2浓度"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:gravity="center" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="修正系数"
-            android:textSize="14sp"
-            android:textStyle="bold"
-            android:gravity="center" />
-
-        <TextView
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
             android:text="状态"
             android:textSize="14sp"
             android:textStyle="bold"
@@ -60,26 +42,6 @@
 
         <TextView
             android:id="@+id/tvNO"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="-"
-            android:textSize="14sp"
-            android:gravity="center"
-            android:textColor="#FF6200EE" />
-
-        <TextView
-            android:id="@+id/tvCO2"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="-"
-            android:textSize="14sp"
-            android:gravity="center"
-            android:textColor="#FF6200EE" />
-
-        <TextView
-            android:id="@+id/tvCorrected"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"

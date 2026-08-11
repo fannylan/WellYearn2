@@ -185,10 +185,7 @@ public final class PhysicalExamReportService {
             section.put("age", respiratory.patientAge);
             section.put("ageGroup", AirwayInflammationDiagnosisRules.isAdult(
                     respiratory.patientAge) ? "成人" : "儿童");
-            section.put("originalNO", respiratory.originalNO);
-            section.put("co2", respiratory.co2);
-            section.put("correctionFactor", respiratory.correctionFactor);
-            section.put("correctedNO", respiratory.correctedNO);
+            section.put("noConcentration", respiratory.noConcentration);
             section.put("dataPointsCount", respiratory.dataPointsCount);
             section.put("chartType", "bar");
             root.put("respiratory", section);
@@ -447,8 +444,7 @@ public final class PhysicalExamReportService {
         float y = drawSectionTitle(canvas, paint, 95f, "检测数据");
         String[][] rows = {
                 {"年龄分组", AirwayInflammationDiagnosisRules.isAdult(section.patientAge) ? "成人" : "儿童", "数据点", String.valueOf(section.dataPointsCount)},
-                {"NO原始浓度", format(section.originalNO, 2) + " ppb", "CO2浓度", format(section.co2, 0) + " ppm"},
-                {"修正系数", format(section.correctionFactor, 2), "修正后NO", format(section.correctedNO, 2) + " ppb"}
+                {"NO浓度", format(section.noConcentration, 2) + " ppb", "检测依据", "下位机上传值"}
         };
         y = drawKeyValueGrid(canvas, paint, y, rows, 30f);
         RectF chart = new RectF(PAGE_MARGIN, y + 28f, PAGE_WIDTH - PAGE_MARGIN, y + 260f);
@@ -456,8 +452,8 @@ public final class PhysicalExamReportService {
                 canvas,
                 paint,
                 chart,
-                new String[]{"修正后NO"},
-                new float[]{section.correctedNO},
+                new String[]{"NO浓度"},
+                new float[]{section.noConcentration},
                 new int[]{Color.rgb(0, 172, 193)});
         y = chart.bottom + 22f;
         y = drawSectionTitle(canvas, paint, y, "诊断结果");
@@ -831,28 +827,19 @@ public final class PhysicalExamReportService {
 
     public static final class RespiratorySection {
         public final int patientAge;
-        public final float originalNO;
-        public final float co2;
-        public final float correctionFactor;
-        public final float correctedNO;
+        public final float noConcentration;
         public final AirwayInflammationDiagnosisRules.RiskLevel riskLevel;
         public final int dataPointsCount;
         public final String diagnosis;
 
         public RespiratorySection(
                 int patientAge,
-                float originalNO,
-                float co2,
-                float correctionFactor,
-                float correctedNO,
+                float noConcentration,
                 AirwayInflammationDiagnosisRules.RiskLevel riskLevel,
                 int dataPointsCount,
                 String diagnosis) {
             this.patientAge = patientAge;
-            this.originalNO = originalNO;
-            this.co2 = co2;
-            this.correctionFactor = correctionFactor;
-            this.correctedNO = correctedNO;
+            this.noConcentration = noConcentration;
             this.riskLevel = riskLevel;
             this.dataPointsCount = dataPointsCount;
             this.diagnosis = diagnosis;

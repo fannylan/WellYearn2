@@ -35,14 +35,14 @@ public final class AirwayInflammationDiagnosisRules {
         return factor > 0f ? originalNo / factor : 0f;
     }
 
-    public static RiskLevel riskLevel(int age, float correctedNo) {
+    public static RiskLevel riskLevel(int age, float noConcentration) {
         if (isAdult(age)) {
-            if (correctedNo < ADULT_LOW_UPPER) return RiskLevel.LOW;
-            if (correctedNo <= ADULT_HIGH_LOWER) return RiskLevel.MEDIUM;
+            if (noConcentration < ADULT_LOW_UPPER) return RiskLevel.LOW;
+            if (noConcentration <= ADULT_HIGH_LOWER) return RiskLevel.MEDIUM;
             return RiskLevel.HIGH;
         }
-        if (correctedNo < CHILD_LOW_UPPER) return RiskLevel.LOW;
-        if (correctedNo <= CHILD_HIGH_LOWER) return RiskLevel.MEDIUM;
+        if (noConcentration < CHILD_LOW_UPPER) return RiskLevel.LOW;
+        if (noConcentration <= CHILD_HIGH_LOWER) return RiskLevel.MEDIUM;
         return RiskLevel.HIGH;
     }
 

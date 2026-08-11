@@ -46,10 +46,7 @@ public final class AirwayInflammationReportService {
             long reportId,
             String barcode,
             int patientAge,
-            float originalNo,
-            float co2,
-            float correctionFactor,
-            float correctedNo,
+            float noConcentration,
             AirwayInflammationDiagnosisRules.RiskLevel riskLevel,
             int dataPointsCount,
             String interpretation) throws IOException, JSONException {
@@ -68,21 +65,18 @@ public final class AirwayInflammationReportService {
                 : "数据无效";
         String diagnosis = valid
                 ? AirwayInflammationDiagnosisRules.diagnosis(riskLevel)
-                : "修正系数无效，无法进行FeNO气道炎症临床判断。";
+                : "NO浓度数据无效，无法进行FeNO气道炎症临床判断。";
         String applicationDepartment = safe(report.getRemarks());
         String patientInfo = buildPatientInfoJson(
                 barcode, patient, report, applicationDepartment).toString();
         String detectionDataChart = buildDetectionDataChartJson(
                 patientAge,
-                originalNo,
-                co2,
-                correctionFactor,
-                correctedNo,
+                noConcentration,
                 dataPointsCount).toString();
         String diagnosisResult = buildDiagnosisResultJson(
                 valid,
                 patientAge,
-                correctedNo,
+                noConcentration,
                 riskLevel,
                 riskLabel,
                 diagnosis,
@@ -100,10 +94,7 @@ public final class AirwayInflammationReportService {
                     report,
                     applicationDepartment,
                     patientAge,
-                    originalNo,
-                    co2,
-                    correctionFactor,
-                    correctedNo,
+                    noConcentration,
                     riskLevel,
                     riskLabel,
                     diagnosis);
@@ -160,33 +151,24 @@ public final class AirwayInflammationReportService {
 
     private static JSONObject buildDetectionDataChartJson(
             int patientAge,
-            float originalNo,
-            float co2,
-            float correctionFactor,
-            float correctedNo,
+            float noConcentration,
             int dataPointsCount) throws JSONException {
         JSONObject json = new JSONObject();
         json.put("section", "检测数据图表");
         json.put("age", patientAge);
         json.put("ageGroup", AirwayInflammationDiagnosisRules.isAdult(patientAge) ? "成人" : "儿童");
-        json.put("originalNo", originalNo);
-        json.put("co2", co2);
-        json.put("correctionFactor", correctionFactor);
-        json.put("correctedNo", correctedNo);
+        json.put("noConcentration", noConcentration);
         json.put("noUnit", "ppb");
-        json.put("co2Unit", "ppm");
         json.put("dataPointsCount", dataPointsCount);
-        json.put("correctionFormula", "correctionFactor=co2/500");
-        json.put("correctedNoFormula", "correctedNo=originalNo/correctionFactor");
 
         JSONObject chart = new JSONObject();
         chart.put("chartType", "bar");
-        chart.put("title", "修正后NO浓度");
+        chart.put("title", "NO浓度");
         JSONArray categories = new JSONArray();
-        categories.put("修正后NO浓度");
+        categories.put("NO浓度");
         chart.put("categories", categories);
         JSONArray values = new JSONArray();
-        values.put(correctedNo);
+        values.put(noConcentration);
         chart.put("values", values);
         chart.put("unit", "ppb");
         json.put("chart", chart);
@@ -196,7 +178,7 @@ public final class AirwayInflammationReportService {
     private static JSONObject buildDiagnosisResultJson(
             boolean valid,
             int patientAge,
-            float correctedNo,
+            float noConcentration,
             AirwayInflammationDiagnosisRules.RiskLevel riskLevel,
             String riskLabel,
             String diagnosis,
@@ -207,7 +189,7 @@ public final class AirwayInflammationReportService {
         json.put("valid", valid);
         json.put("age", patientAge);
         json.put("ageGroup", AirwayInflammationDiagnosisRules.isAdult(patientAge) ? "成人" : "儿童");
-        json.put("correctedNo", correctedNo);
+        json.put("noConcentration", noConcentration);
         json.put("unit", "ppb");
         json.put("riskLevel", riskLevel == null ? JSONObject.NULL : riskLevel.name());
         json.put("riskLabel", riskLabel);
@@ -227,10 +209,7 @@ public final class AirwayInflammationReportService {
             TestReport report,
             String applicationDepartment,
             int patientAge,
-            float originalNo,
-            float co2,
-            float correctionFactor,
-            float correctedNo,
+            float noConcentration,
             AirwayInflammationDiagnosisRules.RiskLevel riskLevel,
             String riskLabel,
             String diagnosis) throws IOException {
@@ -262,10 +241,7 @@ public final class AirwayInflammationReportService {
                     report,
                     applicationDepartment,
                     patientAge,
-                    originalNo,
-                    co2,
-                    correctionFactor,
-                    correctedNo,
+                    noConcentration,
                     riskLevel,
                     riskLabel,
                     diagnosis);
@@ -299,10 +275,7 @@ public final class AirwayInflammationReportService {
             TestReport report,
             String applicationDepartment,
             int patientAge,
-            float originalNo,
-            float co2,
-            float correctionFactor,
-            float correctedNo,
+            float noConcentration,
             AirwayInflammationDiagnosisRules.RiskLevel riskLevel,
             String riskLabel,
             String diagnosis) {
@@ -318,14 +291,13 @@ public final class AirwayInflammationReportService {
 
         y += 14f;
         y = drawSectionTitle(canvas, paint, y, "第二部分  检测数据图表");
-        y = drawDataGrid(
-                canvas, paint, y + 8f, patientAge, originalNo, co2, correctionFactor, correctedNo);
+        y = drawDataGrid(canvas, paint, y + 8f, patientAge, noConcentration);
         RectF chartBounds = new RectF(PAGE_MARGIN, y + 12f, PAGE_WIDTH - PAGE_MARGIN, y + 162f);
-        drawBarChart(canvas, paint, chartBounds, patientAge, correctedNo, riskLevel);
+        drawBarChart(canvas, paint, chartBounds, patientAge, noConcentration, riskLevel);
 
         y = chartBounds.bottom + 14f;
         y = drawSectionTitle(canvas, paint, y, "第三部分  诊断结果");
-        drawDiagnosis(canvas, paint, y + 10f, patientAge, correctedNo, riskLevel, riskLabel, diagnosis);
+        drawDiagnosis(canvas, paint, y + 10f, patientAge, noConcentration, riskLevel, riskLabel, diagnosis);
 
         drawFooter(canvas, paint);
         document.finishPage(page);
@@ -383,15 +355,10 @@ public final class AirwayInflammationReportService {
             Paint paint,
             float y,
             int patientAge,
-            float originalNo,
-            float co2,
-            float correctionFactor,
-            float correctedNo) {
+            float noConcentration) {
         String[][] rows = {
-                {"NO原始浓度", format(originalNo, 2) + " ppb",
-                        "CO2浓度", format(co2, 0) + " ppm"},
-                {"修正系数", format(correctionFactor, 2),
-                        "NO修正后浓度", format(correctedNo, 2) + " ppb"},
+                {"NO浓度", format(noConcentration, 2) + " ppb",
+                        "检测依据", "下位机上传值"},
                 {"年龄分组", AirwayInflammationDiagnosisRules.isAdult(patientAge) ? "成人" : "儿童",
                         "临床阈值", AirwayInflammationDiagnosisRules.isAdult(patientAge)
                                 ? "25 / 50 ppb" : "20 / 35 ppb"}
@@ -446,7 +413,7 @@ public final class AirwayInflammationReportService {
             Paint paint,
             RectF bounds,
             int patientAge,
-            float correctedNo,
+            float noConcentration,
             AirwayInflammationDiagnosisRules.RiskLevel riskLevel) {
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(Color.WHITE);
@@ -460,12 +427,12 @@ public final class AirwayInflammationReportService {
         paint.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         paint.setTextSize(10.5f);
         paint.setColor(Color.rgb(40, 72, 76));
-        canvas.drawText("修正后NO浓度（ppb）", bounds.left + 12f, bounds.top + 18f, paint);
+        canvas.drawText("NO浓度（ppb）", bounds.left + 12f, bounds.top + 18f, paint);
 
         RectF plot = new RectF(bounds.left + 42f, bounds.top + 31f, bounds.right - 24f, bounds.bottom - 25f);
         float lowThreshold = AirwayInflammationDiagnosisRules.isAdult(patientAge) ? 25f : 20f;
         float highThreshold = AirwayInflammationDiagnosisRules.isAdult(patientAge) ? 50f : 35f;
-        float maxValue = Math.max(highThreshold * 1.25f, correctedNo * 1.2f);
+        float maxValue = Math.max(highThreshold * 1.25f, noConcentration * 1.2f);
         float axisMax = Math.max(10f, (float) Math.ceil(maxValue / 10f) * 10f);
 
         paint.setTypeface(Typeface.create("sans-serif", Typeface.NORMAL));
@@ -491,7 +458,7 @@ public final class AirwayInflammationReportService {
 
         float centerX = plot.centerX();
         float barWidth = 76f;
-        float barHeight = Math.max(0f, correctedNo) / axisMax * plot.height();
+        float barHeight = Math.max(0f, noConcentration) / axisMax * plot.height();
         paint.setStyle(Paint.Style.FILL);
         paint.setColor(riskColor(riskLevel));
         canvas.drawRect(centerX - barWidth / 2f, plot.bottom - barHeight,
@@ -500,9 +467,9 @@ public final class AirwayInflammationReportService {
         paint.setTextSize(9f);
         paint.setTextAlign(Paint.Align.CENTER);
         paint.setColor(Color.rgb(39, 57, 59));
-        canvas.drawText(format(correctedNo, 2), centerX,
+        canvas.drawText(format(noConcentration, 2), centerX,
                 Math.max(plot.top + 10f, plot.bottom - barHeight - 5f), paint);
-        canvas.drawText("修正后NO浓度", centerX, plot.bottom + 14f, paint);
+        canvas.drawText("NO浓度", centerX, plot.bottom + 14f, paint);
         paint.setTextAlign(Paint.Align.LEFT);
     }
 
@@ -531,7 +498,7 @@ public final class AirwayInflammationReportService {
             Paint paint,
             float y,
             int patientAge,
-            float correctedNo,
+            float noConcentration,
             AirwayInflammationDiagnosisRules.RiskLevel riskLevel,
             String riskLabel,
             String diagnosis) {
@@ -554,7 +521,7 @@ public final class AirwayInflammationReportService {
         paint.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         paint.setTextSize(15f);
         paint.setColor(foreground);
-        String result = String.format(Locale.CHINA, "FeNO %.2f ppb - %s", correctedNo, riskLabel);
+        String result = String.format(Locale.CHINA, "FeNO %.2f ppb - %s", noConcentration, riskLabel);
         drawCenteredText(canvas, paint, result, PAGE_WIDTH / 2f, y + 27f);
 
         float textY = y + 62f;

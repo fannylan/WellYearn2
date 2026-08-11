@@ -60,9 +60,6 @@ public class Test3Activity extends AppCompatActivity {
     private int patientAge;
 
     private float lastNO;
-    private float lastCO2;
-    private float lastCorrectionFactor;
-    private float lastCorrectedNO;
     private AirwayInflammationDiagnosisRules.RiskLevel lastRiskLevel;
     private boolean detectionCompleted = false;
     private String generatedPdfUri;
@@ -171,47 +168,35 @@ public class Test3Activity extends AppCompatActivity {
                 }
             }
         }
-        if (start == -1 || end == -1 || end - start < 10) {
+        if (start == -1 || end == -1 || end - start < 9) {
             return;
         }
 
         int frameLength = end - start - 1;
         byte[] frame = new byte[frameLength];
         System.arraycopy(data, start + 1, frame, 0, frameLength);
-        int messageId = ((frame[0] & 0xFF) << 8) | (frame[1] & 0xFF);
-        if (messageId != 0x4000) {
+        RespiratoryProtocolParser.Measurement measurement =
+                RespiratoryProtocolParser.parseFrame(frame);
+        if (measurement == null) {
             return;
         }
-
-        int dataLength = ((frame[2] & 0xFF) << 8) | (frame[3] & 0xFF);
-        if (frameLength < dataLength + 1 || frameLength < 9) {
-            return;
-        }
-
-        // 消息体：状态(1) + NO(2) + CO2(2)，浓度为小端无符号数。
-        int offset = 5;
-        int no = (frame[offset + 1] & 0xFF) << 8 | (frame[offset] & 0xFF);
-        offset += 2;
-        int co2 = (frame[offset + 1] & 0xFF) << 8 | (frame[offset] & 0xFF);
-        recordMeasurement(no, co2);
+        recordMeasurement(measurement.noConcentration);
     }
 
     private void parseJsonMeasurement(String jsonText) {
         try {
             JSONObject json = new JSONObject(jsonText);
-            float no = (float) json.getDouble("no");
-            float co2 = (float) json.getDouble("co2");
-            recordMeasurement(no, co2);
+            recordMeasurement((float) json.getDouble("no"));
         } catch (JSONException e) {
             Log.w(TAG, "无法解析呼吸道检测JSON数据", e);
         }
     }
 
-    private void recordMeasurement(float no, float co2) {
+    private void recordMeasurement(float no) {
         if (detectionCompleted) {
             return;
         }
-        updateMeasurement(no, co2);
+        updateMeasurement(no);
         int receivedPoints = ++dataPointsCount;
         runOnUiThread(() -> {
             updateSingleChannelTable();
@@ -224,40 +209,24 @@ public class Test3Activity extends AppCompatActivity {
         });
     }
 
-    private void updateMeasurement(float no, float co2) {
+    private void updateMeasurement(float no) {
         lastNO = no;
-        lastCO2 = co2;
-        lastCorrectionFactor = AirwayInflammationDiagnosisRules.correctionFactor(co2);
-        lastCorrectedNO = AirwayInflammationDiagnosisRules.correctedNo(no, co2);
-        if (AirwayInflammationDiagnosisRules.hasValidCorrectionFactor(co2)) {
-            lastRiskLevel = AirwayInflammationDiagnosisRules.riskLevel(patientAge, lastCorrectedNO);
-        } else {
-            lastRiskLevel = null;
-        }
+        lastRiskLevel = AirwayInflammationDiagnosisRules.riskLevel(patientAge, lastNO);
     }
 
     private void updateSingleChannelTable() {
         if (singleChannelDataRow == null) return;
         ((TextView) singleChannelDataRow.findViewById(R.id.tvNO)).setText(
                 String.format(Locale.CHINA, "%.2f", lastNO));
-        ((TextView) singleChannelDataRow.findViewById(R.id.tvCO2)).setText(
-                String.format(Locale.CHINA, "%.0f", lastCO2));
-        ((TextView) singleChannelDataRow.findViewById(R.id.tvCorrected)).setText(
-                String.format(Locale.CHINA, "%.2f", lastCorrectionFactor));
         TextView status = singleChannelDataRow.findViewById(R.id.tvStatus);
-        if (lastRiskLevel == null) {
-            status.setText("系数无效");
-            status.setTextColor(Color.parseColor("#F44336"));
-        } else {
-            status.setText(AirwayInflammationDiagnosisRules.riskLabel(lastRiskLevel));
-            status.setTextColor(riskColor(lastRiskLevel));
-        }
+        status.setText(AirwayInflammationDiagnosisRules.riskLabel(lastRiskLevel));
+        status.setTextColor(riskColor(lastRiskLevel));
     }
 
     private void updateBarChart() {
         List<BarEntry> entries = new ArrayList<>();
-        entries.add(new BarEntry(0, lastCorrectedNO));
-        BarDataSet dataSet = new BarDataSet(entries, "修正后NO浓度");
+        entries.add(new BarEntry(0, lastNO));
+        BarDataSet dataSet = new BarDataSet(entries, "NO浓度");
         dataSet.setColor(Color.parseColor("#00ACC1"));
         dataSet.setValueTextSize(12f);
         BarData barData = new BarData(dataSet);
@@ -271,12 +240,12 @@ public class Test3Activity extends AppCompatActivity {
         xAxis.setAxisMinimum(-0.75f);
         xAxis.setAxisMaximum(0.75f);
         xAxis.setValueFormatter(new com.github.mikephil.charting.formatter.IndexAxisValueFormatter(
-                new String[]{"修正后NO浓度"}));
+                new String[]{"NO浓度"}));
         YAxis leftAxis = barChart.getAxisLeft();
         leftAxis.setAxisMinimum(0f);
         barChart.getAxisRight().setEnabled(false);
         Description desc = new Description();
-        desc.setText("修正后NO浓度（ppb）");
+        desc.setText("NO浓度（ppb）");
         barChart.setDescription(desc);
     }
 
@@ -325,20 +294,13 @@ public class Test3Activity extends AppCompatActivity {
         sb.append("检测完成，共接收").append(dataPointsCount).append("个数据点。\n");
         sb.append(String.format(Locale.CHINA, "年龄：%d岁（%s）\n",
                 patientAge, AirwayInflammationDiagnosisRules.isAdult(patientAge) ? "成人" : "儿童"));
-        sb.append(String.format(Locale.CHINA, "NO原始浓度：%.2f ppb\n", lastNO));
-        sb.append(String.format(Locale.CHINA, "CO2浓度：%.0f ppm\n", lastCO2));
-        sb.append(String.format(Locale.CHINA, "修正系数：%.2f\n", lastCorrectionFactor));
-        sb.append(String.format(Locale.CHINA, "NO修正后浓度：%.2f ppb\n", lastCorrectedNO));
-        if (lastRiskLevel == null) {
-            sb.append("诊断结果：修正系数无效，无法进行FeNO气道炎症临床判断。\n");
-        } else {
-            sb.append("临床标准：")
-                    .append(AirwayInflammationDiagnosisRules.standardForAge(patientAge)).append("\n");
-            sb.append("风险等级：")
-                    .append(AirwayInflammationDiagnosisRules.riskLabel(lastRiskLevel)).append("\n");
-            sb.append("诊断结果：")
-                    .append(AirwayInflammationDiagnosisRules.diagnosis(lastRiskLevel)).append("\n");
-        }
+        sb.append(String.format(Locale.CHINA, "NO浓度：%.2f ppb\n", lastNO));
+        sb.append("临床标准：")
+                .append(AirwayInflammationDiagnosisRules.standardForAge(patientAge)).append("\n");
+        sb.append("风险等级：")
+                .append(AirwayInflammationDiagnosisRules.riskLabel(lastRiskLevel)).append("\n");
+        sb.append("诊断结果：")
+                .append(AirwayInflammationDiagnosisRules.diagnosis(lastRiskLevel)).append("\n");
         return sb.toString();
     }
 
@@ -353,9 +315,6 @@ public class Test3Activity extends AppCompatActivity {
                                 specimenNo,
                                 patientAge,
                                 lastNO,
-                                lastCO2,
-                                lastCorrectionFactor,
-                                lastCorrectedNO,
                                 lastRiskLevel,
                                 dataPointsCount,
                                 interpretation);

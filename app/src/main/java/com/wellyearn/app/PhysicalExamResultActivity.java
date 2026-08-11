@@ -95,9 +95,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
     private float lastCorrectedCO;
     private float lastLifespanDays;
     private float lastNO;
-    private float lastCO2ForNo;
-    private float lastNoCorrectionFactor;
-    private float lastCorrectedNO;
     private AirwayInflammationDiagnosisRules.RiskLevel lastNoRiskLevel;
 
     private String gastrointestinalDiagnosis = "等待胃肠道检测数据...";
@@ -199,8 +196,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
         noDataRow = noTable.findViewById(R.id.dataRow);
         if (!selectedNO) {
             setText(noDataRow, R.id.tvNO, "--");
-            setText(noDataRow, R.id.tvCO2, "--");
-            setText(noDataRow, R.id.tvCorrected, "--");
             setStatus(noDataRow.findViewById(R.id.tvStatus), "未勾选", "#9E9E9E");
         }
     }
@@ -319,12 +314,14 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
     }
 
     private void parseRespiratoryFrame(byte[] frame) {
-        if (!selectedNO || respiratoryCompleted || frame.length < 10) {
+        if (!selectedNO || respiratoryCompleted) {
             return;
         }
-        recordRespiratoryMeasurement(
-                littleEndianUnsignedShort(frame, 5),
-                littleEndianUnsignedShort(frame, 7));
+        RespiratoryProtocolParser.Measurement measurement =
+                RespiratoryProtocolParser.parseFrame(frame);
+        if (measurement != null) {
+            recordRespiratoryMeasurement(measurement.noConcentration);
+        }
     }
 
     private void parseRespiratoryJson(String value) {
@@ -333,22 +330,15 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
         }
         try {
             JSONObject json = new JSONObject(value);
-            recordRespiratoryMeasurement(
-                    (float) json.getDouble("no"),
-                    (float) json.getDouble("co2"));
+            recordRespiratoryMeasurement((float) json.getDouble("no"));
         } catch (JSONException error) {
             Log.w(TAG, "无法解析呼吸道检测JSON数据", error);
         }
     }
 
-    private void recordRespiratoryMeasurement(float no, float co2) {
+    private void recordRespiratoryMeasurement(float no) {
         lastNO = no;
-        lastCO2ForNo = co2;
-        lastNoCorrectionFactor = AirwayInflammationDiagnosisRules.correctionFactor(co2);
-        lastCorrectedNO = AirwayInflammationDiagnosisRules.correctedNo(no, co2);
-        lastNoRiskLevel = AirwayInflammationDiagnosisRules.hasValidCorrectionFactor(co2)
-                ? AirwayInflammationDiagnosisRules.riskLevel(patientAge, lastCorrectedNO)
-                : null;
+        lastNoRiskLevel = AirwayInflammationDiagnosisRules.riskLevel(patientAge, lastNO);
         int receivedPoints = ++respiratoryPointCount;
 
         runOnUiThread(() -> {
@@ -408,16 +398,9 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
 
     private void updateNoTable() {
         setText(noDataRow, R.id.tvNO, String.format(Locale.CHINA, "%.2f", lastNO));
-        setText(noDataRow, R.id.tvCO2, String.format(Locale.CHINA, "%.0f", lastCO2ForNo));
-        setText(noDataRow, R.id.tvCorrected,
-                String.format(Locale.CHINA, "%.2f", lastNoCorrectionFactor));
         TextView status = noDataRow.findViewById(R.id.tvStatus);
-        if (lastNoRiskLevel == null) {
-            setStatus(status, "系数无效", "#F44336");
-        } else {
-            setStatus(status, AirwayInflammationDiagnosisRules.riskLabel(lastNoRiskLevel),
-                    riskColor(lastNoRiskLevel));
-        }
+        setStatus(status, AirwayInflammationDiagnosisRules.riskLabel(lastNoRiskLevel),
+                riskColor(lastNoRiskLevel));
     }
 
     private void updateGastrointestinalChart() {
@@ -486,8 +469,8 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
 
     private void updateRespiratoryChart() {
         BarDataSet set = new BarDataSet(
-                java.util.Collections.singletonList(new BarEntry(0, lastCorrectedNO)),
-                "修正后NO浓度");
+                java.util.Collections.singletonList(new BarEntry(0, lastNO)),
+                "NO浓度");
         set.setColor(Color.parseColor("#00ACC1"));
         set.setValueTextSize(12f);
         barChart.setData(new BarData(set));
@@ -497,8 +480,8 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
         xAxis.setAxisMaximum(0.75f);
         xAxis.setLabelCount(1);
         xAxis.setValueFormatter(new IndexAxisValueFormatter(
-                new String[]{"修正后NO浓度"}));
-        setChartDescription("修正后NO浓度 (ppb)");
+                new String[]{"NO浓度"}));
+        setChartDescription("NO浓度 (ppb)");
         refreshChart();
     }
 
@@ -549,10 +532,8 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
             return;
         }
         respiratoryCompleted = true;
-        respiratoryDiagnosis = lastNoRiskLevel == null
-                ? "修正系数无效，无法进行FeNO气道炎症临床判断。"
-                : AirwayInflammationDiagnosisRules.riskLabel(lastNoRiskLevel) + "；"
-                        + AirwayInflammationDiagnosisRules.diagnosis(lastNoRiskLevel);
+        respiratoryDiagnosis = AirwayInflammationDiagnosisRules.riskLabel(lastNoRiskLevel) + "；"
+                + AirwayInflammationDiagnosisRules.diagnosis(lastNoRiskLevel);
         updateDiagnosisText();
         startNextDetection(PhysicalExamSelectionRouter.Detection.RESPIRATORY);
     }
@@ -674,9 +655,6 @@ public class PhysicalExamResultActivity extends AppCompatActivity {
                 ? new PhysicalExamReportService.RespiratorySection(
                         patientAge,
                         lastNO,
-                        lastCO2ForNo,
-                        lastNoCorrectionFactor,
-                        lastCorrectedNO,
                         lastNoRiskLevel,
                         respiratoryPointCount,
                         respiratoryDiagnosis)
