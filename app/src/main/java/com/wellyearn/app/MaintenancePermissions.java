@@ -47,13 +47,11 @@ final class MaintenancePermissions {
     }
 
     static boolean canViewOperationLogs(Admin user) {
-        return isSuperUser(user)
-                || (isAdministrator(user) && hasPermission(user, VIEW_OPERATION_LOGS));
+        return isSuperUser(user) || isAdministrator(user);
     }
 
     static boolean canManageNormalUsers(Admin user) {
-        return isSuperUser(user)
-                || (isAdministrator(user) && hasPermission(user, MANAGE_NORMAL_USERS));
+        return isSuperUser(user) || isAdministrator(user);
     }
 
     static boolean canManageAdministrators(Admin user) {
@@ -61,7 +59,7 @@ final class MaintenancePermissions {
     }
 
     static boolean canUseMaintenance(Admin user) {
-        return isSuperUser(user) && hasPermission(user, USE_MAINTENANCE);
+        return isSuperUser(user);
     }
 
     static boolean canSetHospitalName(Admin user) {
@@ -69,25 +67,25 @@ final class MaintenancePermissions {
     }
 
     static boolean canDeleteReportPdf(Admin user) {
-        return user != null && hasPermission(user, DELETE_REPORT_PDF);
+        return isSuperUser(user) || isAdministrator(user) || isNormalUser(user);
     }
 
     static boolean hasPermission(Admin user, String permission) {
         if (user == null || permission == null) return false;
-        if (isSuperUser(user)) return true;
+        if (defaultPermissionsForRole(user.getRole()).contains(permission)) return true;
 
         String stored = user.getPermissions();
-        if (stored == null) {
-            return defaultPermissionsForRole(user.getRole()).contains(permission);
-        }
+        if (stored == null) return false;
         return parse(stored).contains(permission);
     }
 
     static Set<String> effectivePermissions(Admin user) {
         if (user == null) return new LinkedHashSet<>();
         if (isSuperUser(user)) return new LinkedHashSet<>(ALL);
-        if (user.getPermissions() == null) return defaultPermissionsForRole(user.getRole());
-        return parse(user.getPermissions());
+        LinkedHashSet<String> result = new LinkedHashSet<>(
+                defaultPermissionsForRole(user.getRole()));
+        if (user.getPermissions() != null) result.addAll(parse(user.getPermissions()));
+        return result;
     }
 
     static Set<String> defaultPermissionsForRole(String role) {

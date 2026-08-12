@@ -67,7 +67,7 @@ public class MainActivity extends AppCompatActivity {
         });
 
         cardHelp.setOnClickListener(v -> {
-            Toast.makeText(this, "帮助运维模块开发中", Toast.LENGTH_SHORT).show();
+            startActivity(new Intent(MainActivity.this, HelpOperationActivity.class));
         });
     }
 

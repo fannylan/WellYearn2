@@ -46,6 +46,27 @@
             android:name=".HelpOperationActivity"
             android:exported="false" />
         <activity
+            android:name=".HelpPdfListActivity"
+            android:exported="false" />
+        <activity
+            android:name=".HelpPdfViewerActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MaintenanceLoginActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MaintenanceHomeActivity"
+            android:exported="false" />
+        <activity
+            android:name=".UserManagementActivity"
+            android:exported="false" />
+        <activity
+            android:name=".OperationLogActivity"
+            android:exported="false" />
+        <activity
+            android:name=".MaintenanceOperationActivity"
+            android:exported="false" />
+        <activity
             android:name=".ReportSearchActivity"
             android:exported="false" />
         <activity

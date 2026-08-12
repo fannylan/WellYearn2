@@ -123,7 +123,7 @@ public class ReportSearchActivity extends AppCompatActivity {
         findViewById(R.id.buttonReset).setOnClickListener(v -> resetFilters());
         buttonPrint.setOnClickListener(v -> printSelectedReports());
         buttonExportUsb.setOnClickListener(v -> chooseUsbDirectory());
-        buttonDelete.setOnClickListener(v -> requestAdminLoginForDeletion());
+        buttonDelete.setOnClickListener(v -> requestUserLoginForDeletion());
     }
 
     private void initializeData() {
@@ -371,7 +371,7 @@ public class ReportSearchActivity extends AppCompatActivity {
         }
     }
 
-    private void requestAdminLoginForDeletion() {
+    private void requestUserLoginForDeletion() {
         List<ReportSearchResult> reports = selectedReportsWithPdf();
         if (reports.isEmpty()) return;
 
@@ -381,25 +381,25 @@ public class ReportSearchActivity extends AppCompatActivity {
         content.setPadding(padding, padding / 2, padding, 0);
 
         TextView hint = new TextView(this);
-        hint.setText("删除PDF需要管理员权限。默认超级用户：huiyuen / 123456");
+        hint.setText("删除PDF需要拥有“删除报告PDF”权限的用户登录。"
+                + "超级用户、管理员或已授权普通用户均可操作。");
         hint.setTypeface(null, Typeface.BOLD);
         content.addView(hint);
 
         EditText username = new EditText(this);
-        username.setHint("管理员用户名");
+        username.setHint("用户账号");
         username.setSingleLine(true);
-        username.setText(DefaultAdminProvisioner.USERNAME);
         content.addView(username);
 
         EditText password = new EditText(this);
-        password.setHint("管理员密码");
+        password.setHint("用户密码");
         password.setSingleLine(true);
         password.setInputType(InputType.TYPE_CLASS_TEXT
                 | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         content.addView(password);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("管理员登录")
+                .setTitle("删除授权登录")
                 .setView(content)
                 .setNegativeButton("取消", null)
                 .setPositiveButton("登录", null)
@@ -409,7 +409,7 @@ public class ReportSearchActivity extends AppCompatActivity {
                     String usernameValue = username.getText().toString().trim();
                     String passwordValue = password.getText().toString();
                     if (usernameValue.isEmpty() || passwordValue.isEmpty()) {
-                        password.setError("请输入管理员用户名和密码");
+                        password.setError("请输入账号和密码");
                         return;
                     }
                     authenticateAndConfirmDeletion(
@@ -427,15 +427,15 @@ public class ReportSearchActivity extends AppCompatActivity {
         ioExecutor.execute(() -> {
             DefaultAdminProvisioner.ensureDefaultSuperAdmin(database.adminDao());
             Admin admin = database.adminDao().login(username, password);
-            boolean authorized = DefaultAdminProvisioner.isAdministrator(admin);
-            writeOperationLog(username, "管理员登录", null, authorized,
-                    authorized ? "报告PDF删除授权成功" : "用户名、密码或管理员角色无效");
+            boolean authorized = MaintenancePermissions.canDeleteReportPdf(admin);
+            writeOperationLog(username, "报告PDF删除授权", null, authorized,
+                    authorized ? "报告PDF删除授权成功" : "账号、密码或删除权限无效");
             if (authorized) {
                 database.adminDao().updateLastLoginTime(username, System.currentTimeMillis());
             }
             runOnUiThread(() -> {
                 if (!authorized) {
-                    passwordInput.setError("管理员用户名或密码错误");
+                    passwordInput.setError("账号、密码错误或无删除权限");
                     return;
                 }
                 loginDialog.dismiss();
