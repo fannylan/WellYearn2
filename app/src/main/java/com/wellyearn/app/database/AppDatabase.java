@@ -18,7 +18,7 @@ import com.wellyearn.app.database.entity.TestReport;
 
 @Database(
         entities = {Patient.class, TestReport.class, Admin.class, OperationLog.class},
-        version = 4,
+        version = 5,
         exportSchema = false
 )
 public abstract class AppDatabase extends RoomDatabase {
@@ -59,6 +59,13 @@ public abstract class AppDatabase extends RoomDatabase {
         }
     };
 
+    private static final Migration MIGRATION_4_5 = new Migration(4, 5) {
+        @Override
+        public void migrate(@NonNull SupportSQLiteDatabase database) {
+            database.execSQL("ALTER TABLE admins ADD COLUMN permissions TEXT");
+        }
+    };
+
     public static AppDatabase getInstance(Context context) {
         if (instance == null) {
             synchronized (AppDatabase.class) {
@@ -67,7 +74,7 @@ public abstract class AppDatabase extends RoomDatabase {
                                     context.getApplicationContext(),
                                     AppDatabase.class,
                                     "wellyearn_database")
-                            .addMigrations(MIGRATION_2_3, MIGRATION_3_4)
+                            .addMigrations(MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                             .fallbackToDestructiveMigration()
                             .build();
                 }

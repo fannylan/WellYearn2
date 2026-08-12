@@ -22,6 +22,9 @@ public interface AdminDao {
     @Query("SELECT * FROM admins ORDER BY created_time DESC")
     List<Admin> getAllAdmins();
 
+    @Query("SELECT * FROM admins WHERE id = :id")
+    Admin getAdminById(long id);
+
     @Query("SELECT * FROM admins WHERE username = :username")
     Admin getAdminByUsername(String username);
 
@@ -33,4 +36,7 @@ public interface AdminDao {
 
     @Query("SELECT COUNT(*) FROM admins")
     int getAdminCount();
+
+    @Query("SELECT COUNT(*) FROM admins WHERE username = :username AND id != :excludedId")
+    int countOtherUsersWithUsername(String username, long excludedId);
 }

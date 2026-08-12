@@ -27,6 +27,9 @@ public class Admin {
     @ColumnInfo(name = "email")
     public String email;
 
+    @ColumnInfo(name = "permissions")
+    public String permissions;
+
     @ColumnInfo(name = "last_login_time")
     public long lastLoginTime;
 
@@ -56,6 +59,9 @@ public class Admin {
 
     public String getEmail() { return email; }
     public void setEmail(String email) { this.email = email; }
+
+    public String getPermissions() { return permissions; }
+    public void setPermissions(String permissions) { this.permissions = permissions; }
 
     public long getLastLoginTime() { return lastLoginTime; }
     public void setLastLoginTime(long lastLoginTime) { this.lastLoginTime = lastLoginTime; }
