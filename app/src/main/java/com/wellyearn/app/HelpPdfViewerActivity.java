@@ -3,7 +3,6 @@ package com.wellyearn.app;
 import android.graphics.Bitmap;
 import android.graphics.Matrix;
 import android.graphics.pdf.PdfRenderer;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.ParcelFileDescriptor;
 import android.view.View;
@@ -15,11 +14,16 @@ import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class HelpPdfViewerActivity extends AppCompatActivity {
+
+    static final String EXTRA_ASSET_PATH = "help_asset_path";
 
     private final ExecutorService ioExecutor = Executors.newSingleThreadExecutor();
     private ParcelFileDescriptor fileDescriptor;
@@ -49,20 +53,21 @@ public class HelpPdfViewerActivity extends AppCompatActivity {
         findViewById(R.id.buttonBack).setOnClickListener(v -> finish());
         buttonPrevious.setOnClickListener(v -> renderPage(currentPage - 1));
         buttonNext.setOnClickListener(v -> renderPage(currentPage + 1));
-        openDocument(getIntent().getData());
+        openDocument(getIntent().getStringExtra(EXTRA_ASSET_PATH));
     }
 
-    private void openDocument(Uri uri) {
-        if (uri == null) {
-            Toast.makeText(this, "PDF 地址无效", Toast.LENGTH_LONG).show();
+    private void openDocument(String assetPath) {
+        if (assetPath == null || assetPath.trim().isEmpty()) {
+            Toast.makeText(this, "PDF资源地址无效", Toast.LENGTH_LONG).show();
             finish();
             return;
         }
         setLoading(true);
         ioExecutor.execute(() -> {
             try {
-                fileDescriptor = getContentResolver().openFileDescriptor(uri, "r");
-                if (fileDescriptor == null) throw new IOException("无法读取PDF文件");
+                File cachedPdf = copyAssetToCache(assetPath);
+                fileDescriptor = ParcelFileDescriptor.open(
+                        cachedPdf, ParcelFileDescriptor.MODE_READ_ONLY);
                 renderer = new PdfRenderer(fileDescriptor);
                 if (renderer.getPageCount() <= 0) throw new IOException("PDF没有可显示页面");
                 renderPageOnWorker(0);
@@ -76,6 +81,25 @@ public class HelpPdfViewerActivity extends AppCompatActivity {
                 });
             }
         });
+    }
+
+    private File copyAssetToCache(String assetPath) throws IOException {
+        File directory = new File(getCacheDir(), "help_pdfs");
+        if (!directory.exists() && !directory.mkdirs()) {
+            throw new IOException("无法创建帮助文档缓存目录");
+        }
+        File target = new File(directory,
+                Integer.toHexString(assetPath.hashCode()) + ".pdf");
+        try (InputStream input = getAssets().open(assetPath);
+             FileOutputStream output = new FileOutputStream(target, false)) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+            output.flush();
+        }
+        return target;
     }
 
     private void renderPage(int pageIndex) {

@@ -8,11 +8,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.RecyclerView;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
-import java.util.Locale;
 
 final class HelpPdfAdapter extends RecyclerView.Adapter<HelpPdfAdapter.Holder> {
 
@@ -22,8 +19,6 @@ final class HelpPdfAdapter extends RecyclerView.Adapter<HelpPdfAdapter.Holder> {
 
     private final List<HelpPdfListActivity.HelpPdfItem> items = new ArrayList<>();
     private final Listener listener;
-    private final SimpleDateFormat dateFormat =
-            new SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.CHINA);
 
     HelpPdfAdapter(Listener listener) {
         this.listener = listener;
@@ -47,11 +42,7 @@ final class HelpPdfAdapter extends RecyclerView.Adapter<HelpPdfAdapter.Holder> {
     public void onBindViewHolder(@NonNull Holder holder, int position) {
         HelpPdfListActivity.HelpPdfItem item = items.get(position);
         holder.name.setText(item.name);
-        String size = item.size <= 0 ? "未知大小"
-                : String.format(Locale.CHINA, "%.1f MB", item.size / 1024d / 1024d);
-        String modified = item.modified <= 0 ? "未知时间"
-                : dateFormat.format(new Date(item.modified));
-        holder.detail.setText(size + "  ·  " + modified);
+        holder.detail.setText("应用内置帮助文档");
         holder.itemView.setOnClickListener(v -> listener.onPdfClick(item));
     }
 
