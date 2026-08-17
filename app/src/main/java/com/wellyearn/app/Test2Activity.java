@@ -1,9 +1,7 @@
 package com.wellyearn.app;
 
-import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Color;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -104,7 +102,7 @@ public class Test2Activity extends AppCompatActivity {
             } else if (generatedPdfUri == null || generatedPdfUri.isEmpty()) {
                 Toast.makeText(this, "诊断报告正在生成，请稍候", Toast.LENGTH_SHORT).show();
             } else {
-                openGeneratedReport();
+                startActivity(new Intent(this, ReportSearchActivity.class));
             }
         });
     }
@@ -328,17 +326,6 @@ public class Test2Activity extends AppCompatActivity {
                         Toast.LENGTH_LONG).show());
             }
         }).start();
-    }
-
-    private void openGeneratedReport() {
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(Uri.parse(generatedPdfUri), "application/pdf");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            startActivity(intent);
-        } catch (ActivityNotFoundException error) {
-            Toast.makeText(this, "未找到可打开PDF的应用", Toast.LENGTH_SHORT).show();
-        }
     }
 
     private void updateCurrentTime() {

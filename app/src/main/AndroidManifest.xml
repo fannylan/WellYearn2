@@ -70,6 +70,9 @@
             android:name=".ReportSearchActivity"
             android:exported="false" />
         <activity
+            android:name=".ReportPdfViewerActivity"
+            android:exported="false" />
+        <activity
             android:name=".DetectAnalysisActivity"
             android:exported="false" /> <!-- 主Activity - 配置为启动器主屏幕 -->
         <activity

@@ -232,12 +232,16 @@ public class ReportSearchActivity extends AppCompatActivity {
     }
 
     private void openPdf(ReportSearchResult report) {
+        if (report == null || TextUtils.isEmpty(report.pdfUri)) {
+            Toast.makeText(this, "该报告没有可用的PDF", Toast.LENGTH_SHORT).show();
+            return;
+        }
         try {
-            Intent intent = new Intent(Intent.ACTION_VIEW);
-            intent.setDataAndType(Uri.parse(report.pdfUri), "application/pdf");
-            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            Intent intent = new Intent(this, ReportPdfViewerActivity.class);
+            intent.putExtra(ReportPdfViewerActivity.EXTRA_PDF_URI, report.pdfUri);
+            intent.putExtra(ReportPdfViewerActivity.EXTRA_PDF_TITLE, reportFileName(report));
             startActivity(intent);
-            logOperationAsync(GUEST_OPERATOR, "查看PDF", report, true, "已打开PDF查看器");
+            logOperationAsync(GUEST_OPERATOR, "查看PDF", report, true, "已在应用内打开PDF");
         } catch (RuntimeException error) {
             logOperationAsync(GUEST_OPERATOR, "查看PDF", report, false, error.getMessage());
             Toast.makeText(this, "无法打开PDF：" + safeMessage(error), Toast.LENGTH_LONG).show();
