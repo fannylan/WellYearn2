@@ -133,7 +133,7 @@
                     <EditText
                         android:id="@+id/etHemoglobin"
                         style="@style/InfoEditRight"
-                        android:hint="单位 g/L"
+                        android:hint="红细胞寿命检测必填，单位 g/L"
                         android:inputType="numberDecimal" />
                 </LinearLayout>
 

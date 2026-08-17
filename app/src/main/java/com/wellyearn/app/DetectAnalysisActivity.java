@@ -4,7 +4,13 @@ import android.Manifest;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
+import android.view.KeyEvent;
+import android.view.inputmethod.EditorInfo;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
@@ -33,6 +39,7 @@ import java.util.Locale;
 public class DetectAnalysisActivity extends AppCompatActivity {
 
     private static final int CAMERA_PERMISSION_REQUEST = 100;
+    private static final int SCANNER_INPUT_SETTLE_MS = 200;
 
     private EditText etScanResult;
     private Button btnScan, btnBack, btnGI, btnRBC, btnResp;
@@ -46,8 +53,8 @@ public class DetectAnalysisActivity extends AppCompatActivity {
 
     private AppDatabase db;
     private UsbSerialHelper usbHelper;
-    private JSONObject currentPatientJson;
-    private boolean isScanned = false;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private final Runnable scannerInputCommitRunnable = this::commitScannerInput;
     private volatile boolean usbHandedOff;
 
     @Override
@@ -87,12 +94,55 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         etApplyDept = findViewById(R.id.etApplyDept);
         etHemoglobin = findViewById(R.id.etHemoglobin);
 
+        initScannerInput();
+
         btnScan.setOnClickListener(v -> startScan());
         btnBack.setOnClickListener(v -> finish());
 
         btnGI.setOnClickListener(v -> onTestClick("胃肠道疾病检测", "7E 20 00 00 00 20 7E", Test1Activity.class));
         btnRBC.setOnClickListener(v -> onTestClick("红细胞寿命检测", "7E 30 00 00 00 30 7E", Test2Activity.class));
         btnResp.setOnClickListener(v -> onTestClick("呼吸道疾病检测", "7E 40 00 00 00 40 7E", Test3Activity.class));
+    }
+
+    private void initScannerInput() {
+        etScanResult.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable editable) {
+                mainHandler.removeCallbacks(scannerInputCommitRunnable);
+                if (!TextUtils.isEmpty(editable.toString().trim())) {
+                    mainHandler.postDelayed(
+                            scannerInputCommitRunnable,
+                            SCANNER_INPUT_SETTLE_MS);
+                }
+            }
+        });
+
+        etScanResult.setOnEditorActionListener((view, actionId, event) -> {
+            boolean enterPressed = event != null
+                    && event.getKeyCode() == KeyEvent.KEYCODE_ENTER
+                    && event.getAction() == KeyEvent.ACTION_DOWN;
+            if (actionId == EditorInfo.IME_ACTION_DONE || enterPressed) {
+                commitScannerInput();
+                return true;
+            }
+            return false;
+        });
+    }
+
+    private void commitScannerInput() {
+        mainHandler.removeCallbacks(scannerInputCommitRunnable);
+        String scanText = etScanResult.getText().toString().trim();
+        if (!scanText.isEmpty()) {
+            parseAndFillPatientInfo(scanText);
+        }
     }
 
     private void initDatabase() {
@@ -139,8 +189,7 @@ public class DetectAnalysisActivity extends AppCompatActivity {
             if (result.getContents() != null) {
                 String scanText = result.getContents();
                 etScanResult.setText(scanText);
-                isScanned = true;
-                parseAndFillPatientInfo(scanText);
+                commitScannerInput();
             } else {
                 Toast.makeText(this, "扫码取消", Toast.LENGTH_SHORT).show();
             }
@@ -160,18 +209,32 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         }
     }
 
-    private void parseAndFillPatientInfo(String jsonStr) {
+    private void parseAndFillPatientInfo(String scanText) {
+        String scanValue = scanText == null ? "" : scanText.trim();
+        if (scanValue.isEmpty()) return;
+
+        // 普通条码直接作为条形码号；JSON二维码则提取条形码并填充患者信息。
+        if (!scanValue.startsWith("{")) {
+            etSpecimenNo.setText(scanValue);
+            return;
+        }
+
         try {
-            currentPatientJson = new JSONObject(jsonStr);
-            JSONObject json = new JSONObject(jsonStr);
-            etSpecimenNo.setText(currentPatientJson.optString("specimenNo", ""));
-            etPatientType.setText(currentPatientJson.optString("patientType", ""));
-            etPatientName.setText(currentPatientJson.optString("name", ""));
-            etPatientAge.setText(currentPatientJson.optString("age", ""));
-            etPhone.setText(currentPatientJson.optString("phone", ""));
-            etApplyDoctor.setText(currentPatientJson.optString("applyDoctor", ""));
-            etApplyDept.setText(currentPatientJson.optString("applyDept", ""));
-            String applyTime = currentPatientJson.optString("applyTime", "");
+            JSONObject json = new JSONObject(scanValue);
+            String specimenNo = json.optString("specimenNo", "").trim();
+            if (specimenNo.isEmpty()) specimenNo = json.optString("barcode", "").trim();
+            if (specimenNo.isEmpty()) {
+                specimenNo = json.optString("specimenCode", "").trim();
+            }
+            etSpecimenNo.setText(specimenNo.isEmpty() ? scanValue : specimenNo);
+            etPatientType.setText(json.optString("patientType", ""));
+            etPatientName.setText(json.optString("name", ""));
+            etPatientAge.setText(json.optString("age", ""));
+            etPhone.setText(json.optString("phone", ""));
+            etApplyDoctor.setText(json.optString("applyDoctor", ""));
+            etApplyDept.setText(json.optString("applyDept", ""));
+            etHemoglobin.setText(json.optString("hemoglobin", ""));
+            String applyTime = json.optString("applyTime", "");
             String gender = json.optString("gender", "");
             if (!gender.isEmpty()) {
                 String[] genders = getResources().getStringArray(R.array.gender_array);
@@ -186,41 +249,19 @@ public class DetectAnalysisActivity extends AppCompatActivity {
                 tvApplyTime.setText(applyTime);
             }
         } catch (JSONException e) {
-            e.printStackTrace();
-            Toast.makeText(this, "二维码格式错误，请手动输入", Toast.LENGTH_SHORT).show();
+            etSpecimenNo.setText(scanValue);
+            Toast.makeText(
+                    this,
+                    "已将扫码内容填入条形码号，请补充患者信息",
+                    Toast.LENGTH_SHORT).show();
         }
-    }
-
-    private void fillMockPatientInfo(String input) {
-        etSpecimenNo.setText(input);
-        etPatientType.setText("门诊");
-        etPatientName.setText("模拟患者");
-        // 设置性别 Spinner 选中“男”
-        String[] genders = getResources().getStringArray(R.array.gender_array);
-        for (int i = 0; i < genders.length; i++) {
-            if ("男".equals(genders[i])) {
-                spPatientGender.setSelection(i);
-                break;
-            }
-        }
-        etPatientAge.setText("30");
-        etPhone.setText("13800138000");
-        etApplyDoctor.setText("张医生");
-        etApplyDept.setText("内科");
-        etHemoglobin.setText("140"); // 默认值
-        isScanned = false;
-        Toast.makeText(this, "已生成模拟患者信息", Toast.LENGTH_SHORT).show();
     }
 
     private void onTestClick(String testName, String hexCmd, Class<?> targetClass) {
-        if (!isScanned && TextUtils.isEmpty(etScanResult.getText().toString())) {
-            Toast.makeText(this, "请扫码或输入条形码号", Toast.LENGTH_SHORT).show();
-            return;
+        if (TextUtils.isEmpty(etSpecimenNo.getText())
+                && !TextUtils.isEmpty(etScanResult.getText().toString().trim())) {
+            commitScannerInput();
         }
-        if (!isScanned && !TextUtils.isEmpty(etScanResult.getText().toString())) {
-            fillMockPatientInfo(etScanResult.getText().toString());
-        }
-
         if (TextUtils.isEmpty(etSpecimenNo.getText())) {
             Toast.makeText(this, "请输入条形码号", Toast.LENGTH_SHORT).show();
             return;
@@ -247,17 +288,24 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         // 获取底物
         String substrate = spSubstrate.getSelectedItem().toString();
         // 获取血红蛋白总量
-        String hemoglobinStr = etHemoglobin.getText().toString();
-        if (TextUtils.isEmpty(hemoglobinStr)) {
+        String hemoglobinStr = etHemoglobin.getText().toString().trim();
+        boolean hemoglobinRequired = targetClass == Test2Activity.class;
+        if (hemoglobinRequired && TextUtils.isEmpty(hemoglobinStr)) {
             Toast.makeText(this, "请输入血红蛋白总量", Toast.LENGTH_SHORT).show();
+            etHemoglobin.requestFocus();
             return;
         }
         float hemoglobin;
-        try {
-            hemoglobin = Float.parseFloat(hemoglobinStr);
-        } catch (NumberFormatException e) {
-            Toast.makeText(this, "血红蛋白总量格式错误", Toast.LENGTH_SHORT).show();
-            return;
+        if (TextUtils.isEmpty(hemoglobinStr)) {
+            hemoglobin = 0f;
+        } else {
+            try {
+                hemoglobin = Float.parseFloat(hemoglobinStr);
+            } catch (NumberFormatException e) {
+                Toast.makeText(this, "血红蛋白总量格式错误", Toast.LENGTH_SHORT).show();
+                etHemoglobin.requestFocus();
+                return;
+            }
         }
         new Thread(() -> {
             // 保存患者
@@ -355,6 +403,7 @@ public class DetectAnalysisActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
+        mainHandler.removeCallbacks(scannerInputCommitRunnable);
         super.onDestroy();
         if (usbHelper != null) usbHelper.disconnect();
     }
