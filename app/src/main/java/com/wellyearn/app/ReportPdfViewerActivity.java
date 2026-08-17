@@ -143,14 +143,12 @@ public class ReportPdfViewerActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 loadingPages.remove(pageIndex);
                 if (destroyed) {
-                    renderedBitmap.recycle();
                     return;
                 }
                 pageCache.put(pageIndex, renderedBitmap);
                 pageAdapter.notifyItemChanged(pageIndex);
             });
         } catch (Exception error) {
-            if (bitmap != null) bitmap.recycle();
             runOnUiThread(() -> {
                 loadingPages.remove(pageIndex);
                 if (destroyed) return;
@@ -184,21 +182,34 @@ public class ReportPdfViewerActivity extends AppCompatActivity {
     protected void onDestroy() {
         destroyed = true;
         recyclerPages.setAdapter(null);
-        renderExecutor.execute(() -> {
-            if (pdfRenderer != null) pdfRenderer.close();
-            if (fileDescriptor != null) {
-                try {
-                    fileDescriptor.close();
-                } catch (IOException ignored) {
-                }
-            }
-            for (Bitmap bitmap : pageCache.snapshot().values()) {
-                if (bitmap != null && !bitmap.isRecycled()) bitmap.recycle();
-            }
-            pageCache.evictAll();
-        });
+        // Only remove references here. Recycling a Bitmap while the window's exit frame
+        // is still being drawn can crash RenderThread with "trying to use a recycled bitmap".
+        pageCache.evictAll();
+        renderExecutor.execute(this::closeDocumentSafely);
         renderExecutor.shutdown();
         super.onDestroy();
+    }
+
+    private void closeDocumentSafely() {
+        PdfRenderer renderer = pdfRenderer;
+        pdfRenderer = null;
+        if (renderer != null) {
+            try {
+                renderer.close();
+            } catch (RuntimeException ignored) {
+                // The Activity is already closing; a renderer cleanup failure must not
+                // terminate the whole application from this background thread.
+            }
+        }
+
+        ParcelFileDescriptor descriptor = fileDescriptor;
+        fileDescriptor = null;
+        if (descriptor != null) {
+            try {
+                descriptor.close();
+            } catch (IOException | RuntimeException ignored) {
+            }
+        }
     }
 
     private final class PdfPageAdapter extends RecyclerView.Adapter<PdfPageViewHolder> {
