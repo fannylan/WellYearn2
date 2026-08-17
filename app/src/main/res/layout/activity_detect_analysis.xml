@@ -60,7 +60,10 @@
 
                 <LinearLayout style="@style/HorizontalInfoRow">
                     <TextView style="@style/InfoLabelLeft" android:text="患者类型：" />
-                    <EditText android:id="@+id/etPatientType" style="@style/InfoEditRight" />
+                    <Spinner
+                        android:id="@+id/spPatientType"
+                        style="@style/InfoSpinnerRight"
+                        android:entries="@array/patient_type_array" />
                 </LinearLayout>
 
                 <LinearLayout style="@style/HorizontalInfoRow">

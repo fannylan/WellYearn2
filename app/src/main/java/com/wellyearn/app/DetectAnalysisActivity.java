@@ -44,9 +44,8 @@ public class DetectAnalysisActivity extends AppCompatActivity {
     private EditText etScanResult;
     private Button btnScan, btnBack, btnGI, btnRBC, btnResp;
 
-    private EditText etSpecimenNo, etPatientType, etPatientName, etPatientAge, etPhone;
-    // 将 etPatientGender 改为 spPatientGender
-    private Spinner spPatientGender;
+    private EditText etSpecimenNo, etPatientName, etPatientAge, etPhone;
+    private Spinner spPatientType, spPatientGender;
     private TextView tvCurrentDate, tvApplyTime;
     private EditText etApplyDoctor, etApplyDept,etHemoglobin;
     private Spinner spSubstrate;
@@ -81,7 +80,7 @@ public class DetectAnalysisActivity extends AppCompatActivity {
         btnResp = findViewById(R.id.btnResp);
 
         etSpecimenNo = findViewById(R.id.etSpecimenNo);
-        etPatientType = findViewById(R.id.etPatientType);
+        spPatientType = findViewById(R.id.spPatientType);
         etPatientName = findViewById(R.id.etPatientName);
         spPatientGender = findViewById(R.id.spPatientGender);
         etPatientAge = findViewById(R.id.etPatientAge);
@@ -227,7 +226,17 @@ public class DetectAnalysisActivity extends AppCompatActivity {
                 specimenNo = json.optString("specimenCode", "").trim();
             }
             etSpecimenNo.setText(specimenNo.isEmpty() ? scanValue : specimenNo);
-            etPatientType.setText(json.optString("patientType", ""));
+            String patientType = json.optString("patientType", "").trim();
+            if (!patientType.isEmpty()) {
+                String[] patientTypes = getResources().getStringArray(
+                        R.array.patient_type_array);
+                for (int i = 0; i < patientTypes.length; i++) {
+                    if (patientTypes[i].equals(patientType)) {
+                        spPatientType.setSelection(i);
+                        break;
+                    }
+                }
+            }
             etPatientName.setText(json.optString("name", ""));
             etPatientAge.setText(json.optString("age", ""));
             etPhone.setText(json.optString("phone", ""));
@@ -273,7 +282,7 @@ public class DetectAnalysisActivity extends AppCompatActivity {
 
         final String name = etPatientName.getText().toString();
         final String gender = spPatientGender.getSelectedItem().toString();
-        final String patientType = etPatientType.getText().toString();
+        final String patientType = spPatientType.getSelectedItem().toString();
         final int age;
         try {
             age = Integer.parseInt(etPatientAge.getText().toString());
