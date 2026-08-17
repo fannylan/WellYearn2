@@ -151,7 +151,7 @@
             android:layout_height="wrap_content"
             android:layout_marginStart="8dp"
             android:enabled="false"
-            android:text="删除PDF" />
+            android:text="删除报告" />
     </LinearLayout>
 
     <LinearLayout

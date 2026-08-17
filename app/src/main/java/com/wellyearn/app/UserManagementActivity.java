@@ -132,7 +132,7 @@ public class UserManagementActivity extends AppCompatActivity {
 
         CheckBox viewLogs = checkbox("查看操作日志");
         CheckBox manageNormals = checkbox("新增、编辑和删除普通用户");
-        CheckBox deletePdf = checkbox("删除报告检索中的 PDF");
+        CheckBox deletePdf = checkbox("删除报告检索中的报告");
         content.addView(viewLogs);
         content.addView(manageNormals);
         content.addView(deletePdf);

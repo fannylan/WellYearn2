@@ -227,6 +227,10 @@ public class ReportSearchActivity extends AppCompatActivity {
         return result;
     }
 
+    private List<ReportSearchResult> selectedReports() {
+        return new ArrayList<>(adapter.getSelectedReports());
+    }
+
     private void openPdf(ReportSearchResult report) {
         try {
             Intent intent = new Intent(Intent.ACTION_VIEW);
@@ -372,7 +376,7 @@ public class ReportSearchActivity extends AppCompatActivity {
     }
 
     private void requestUserLoginForDeletion() {
-        List<ReportSearchResult> reports = selectedReportsWithPdf();
+        List<ReportSearchResult> reports = selectedReports();
         if (reports.isEmpty()) return;
 
         int padding = Math.round(20 * getResources().getDisplayMetrics().density);
@@ -381,8 +385,10 @@ public class ReportSearchActivity extends AppCompatActivity {
         content.setPadding(padding, padding / 2, padding, 0);
 
         TextView hint = new TextView(this);
-        hint.setText("删除PDF需要拥有“删除报告PDF”权限的用户登录。"
-                + "超级用户、管理员或已授权普通用户均可操作。");
+        hint.setText(String.format(
+                Locale.CHINA,
+                "验证通过后将删除已选的 %d 份报告及其关联PDF文件。",
+                reports.size()));
         hint.setTypeface(null, Typeface.BOLD);
         content.addView(hint);
 
@@ -399,10 +405,10 @@ public class ReportSearchActivity extends AppCompatActivity {
         content.addView(password);
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("删除授权登录")
+                .setTitle("删除报告登录验证")
                 .setView(content)
-                .setNegativeButton("取消", null)
-                .setPositiveButton("登录", null)
+                .setNegativeButton("关闭", null)
+                .setPositiveButton("登录并删除", null)
                 .create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 .setOnClickListener(v -> {
@@ -412,6 +418,7 @@ public class ReportSearchActivity extends AppCompatActivity {
                         password.setError("请输入账号和密码");
                         return;
                     }
+                    dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
                     authenticateAndConfirmDeletion(
                             usernameValue, passwordValue, reports, dialog, password);
                 }));
@@ -426,65 +433,78 @@ public class ReportSearchActivity extends AppCompatActivity {
             EditText passwordInput) {
         ioExecutor.execute(() -> {
             DefaultAdminProvisioner.ensureDefaultSuperAdmin(database.adminDao());
-            Admin admin = database.adminDao().login(username, password);
-            boolean authorized = MaintenancePermissions.canDeleteReportPdf(admin);
-            writeOperationLog(username, "报告PDF删除授权", null, authorized,
-                    authorized ? "报告PDF删除授权成功" : "账号、密码或删除权限无效");
+            Admin user = database.adminDao().login(username, password);
+            boolean authorized = user != null;
+            writeOperationLog(username, "删除报告登录验证", null, authorized,
+                    authorized ? "账号密码验证成功" : "账号或密码错误");
             if (authorized) {
                 database.adminDao().updateLastLoginTime(username, System.currentTimeMillis());
             }
             runOnUiThread(() -> {
+                if (!loginDialog.isShowing()) return;
                 if (!authorized) {
-                    passwordInput.setError("账号、密码错误或无删除权限");
+                    loginDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(true);
+                    passwordInput.setText("");
+                    passwordInput.setError("密码错误");
+                    passwordInput.requestFocus();
                     return;
                 }
                 loginDialog.dismiss();
-                showDeleteConfirmation(username, reports);
+                ioExecutor.execute(() -> deleteReports(username, reports));
             });
         });
     }
 
-    private void showDeleteConfirmation(String adminUsername, List<ReportSearchResult> reports) {
-        new AlertDialog.Builder(this)
-                .setTitle("确认删除PDF")
-                .setMessage(String.format(
-                        Locale.CHINA,
-                        "将删除已选的 %d 份PDF文件，报告记录会保留但PDF链接将清空。是否继续？",
-                        reports.size()))
-                .setNegativeButton("取消", null)
-                .setPositiveButton("删除", (dialog, which) ->
-                        ioExecutor.execute(() -> deletePdfFiles(adminUsername, reports)))
-                .show();
-    }
-
-    private void deletePdfFiles(String adminUsername, List<ReportSearchResult> reports) {
+    private void deleteReports(String operatorUsername, List<ReportSearchResult> reports) {
         int successCount = 0;
+        int pdfWarningCount = 0;
         for (ReportSearchResult report : reports) {
             try {
-                int deleted = getContentResolver().delete(Uri.parse(report.pdfUri), null, null);
-                if (deleted <= 0) throw new IOException("PDF不存在或无法删除");
-
                 TestReport entity = database.testReportDao().getReportById(report.reportId);
-                if (entity != null) {
-                    entity.setPdfUri("");
-                    entity.setPdfFileName("");
-                    database.testReportDao().update(entity);
+                if (entity == null) throw new IOException("报告记录不存在");
+                database.testReportDao().delete(entity);
+
+                String detail = "已删除报告数据库记录";
+                if (!TextUtils.isEmpty(report.pdfUri)) {
+                    try {
+                        int deleted = getContentResolver().delete(
+                                Uri.parse(report.pdfUri), null, null);
+                        if (deleted > 0) {
+                            detail += "及关联PDF文件";
+                        } else {
+                            pdfWarningCount++;
+                            detail += "；关联PDF不存在或无法删除";
+                        }
+                    } catch (Exception pdfError) {
+                        pdfWarningCount++;
+                        detail += "；关联PDF删除失败：" + safeMessage(pdfError);
+                    }
                 }
                 successCount++;
-                writeOperationLog(adminUsername, "删除PDF", report, true,
-                        "已删除PDF并清空报告链接");
+                writeOperationLog(operatorUsername, "删除报告", report, true, detail);
             } catch (Exception error) {
-                writeOperationLog(adminUsername, "删除PDF", report, false,
+                writeOperationLog(operatorUsername, "删除报告", report, false,
                         safeMessage(error));
             }
         }
 
         int finalSuccessCount = successCount;
+        int finalPdfWarningCount = pdfWarningCount;
         runOnUiThread(() -> {
+            String message = String.format(
+                    Locale.CHINA,
+                    "已删除 %d/%d 份报告",
+                    finalSuccessCount,
+                    reports.size());
+            if (finalPdfWarningCount > 0) {
+                message += String.format(
+                        Locale.CHINA,
+                        "；%d 个关联PDF未能清理",
+                        finalPdfWarningCount);
+            }
             Toast.makeText(
                     this,
-                    String.format(Locale.CHINA, "已删除 %d/%d 份PDF",
-                            finalSuccessCount, reports.size()),
+                    message,
                     Toast.LENGTH_LONG).show();
             loadReports();
         });

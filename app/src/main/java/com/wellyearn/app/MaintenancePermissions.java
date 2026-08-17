@@ -125,7 +125,7 @@ final class MaintenancePermissions {
         if (canViewOperationLogs(user)) labels.add("查看操作日志");
         if (canManageNormalUsers(user)) labels.add("管理普通用户");
         if (canUseMaintenance(user)) labels.add("运维操作");
-        if (canDeleteReportPdf(user)) labels.add("删除报告PDF");
+        if (canDeleteReportPdf(user)) labels.add("删除报告");
         if (canSetHospitalName(user)) labels.add("设置医院名称");
         return labels.isEmpty() ? "无可用权限" : joinWithChineseComma(labels);
     }
