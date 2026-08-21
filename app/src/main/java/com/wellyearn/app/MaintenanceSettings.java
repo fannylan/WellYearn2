@@ -3,7 +3,7 @@ package com.wellyearn.app;
 import android.content.Context;
 import android.content.SharedPreferences;
 
-final class MaintenanceSettings {
+public final class MaintenanceSettings {
 
     private static final String PREFERENCES = "maintenance_settings";
     private static final String KEY_HOSPITAL_NAME = "hospital_name";
@@ -11,7 +11,7 @@ final class MaintenanceSettings {
     private MaintenanceSettings() {
     }
 
-    static String getHospitalName(Context context) {
+    public static String getHospitalName(Context context) {
         return preferences(context).getString(KEY_HOSPITAL_NAME, "未设置");
     }
 

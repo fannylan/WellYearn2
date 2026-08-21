@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
 
+import com.wellyearn.app.MaintenanceSettings;
 import com.wellyearn.app.database.AppDatabase;
 import com.wellyearn.app.database.entity.Patient;
 import com.wellyearn.app.database.entity.TestReport;
@@ -222,14 +223,16 @@ public final class GastrointestinalReportService {
             if (output == null) {
                 throw new IOException("无法写入诊断报告PDF");
             }
+            String hospitalName = MaintenanceSettings.getHospitalName(context);
             drawPatientAndDataPage(
                     document,
                     barcode,
                     patient,
                     report,
                     applicationDepartment,
-                    measurements);
-            drawDiagnosisPage(document, positive, interpretation);
+                    measurements,
+                    hospitalName);
+            drawDiagnosisPage(document, positive, interpretation, hospitalName);
             document.writeTo(output);
             success = true;
         } finally {
@@ -259,12 +262,15 @@ public final class GastrointestinalReportService {
             Patient patient,
             TestReport report,
             String applicationDepartment,
-            List<ChannelMeasurement> measurements) {
+            List<ChannelMeasurement> measurements,
+            String hospitalName) {
         PdfDocument.Page page = document.startPage(
                 new PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create());
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
 
+        ReportHospitalHeader.draw(
+                canvas, hospitalName, PAGE_MARGIN, PAGE_WIDTH - PAGE_MARGIN);
         drawReportHeader(canvas, paint, report);
         float y = 100f;
         y = drawSectionTitle(canvas, paint, y, "第一部分  患者信息");
@@ -290,12 +296,15 @@ public final class GastrointestinalReportService {
     private static void drawDiagnosisPage(
             PdfDocument document,
             boolean positive,
-            String interpretation) {
+            String interpretation,
+            String hospitalName) {
         PdfDocument.Page page = document.startPage(
                 new PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 2).create());
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
 
+        ReportHospitalHeader.draw(
+                canvas, hospitalName, PAGE_MARGIN, PAGE_WIDTH - PAGE_MARGIN);
         paint.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
         paint.setTextSize(22f);
         paint.setColor(Color.rgb(24, 75, 122));

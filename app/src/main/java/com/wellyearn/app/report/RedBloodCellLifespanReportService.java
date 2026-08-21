@@ -13,6 +13,7 @@ import android.net.Uri;
 import android.os.Environment;
 import android.provider.MediaStore;
 
+import com.wellyearn.app.MaintenanceSettings;
 import com.wellyearn.app.RedBloodCellLifespanCalculator;
 import com.wellyearn.app.database.AppDatabase;
 import com.wellyearn.app.database.entity.Patient;
@@ -329,6 +330,7 @@ public final class RedBloodCellLifespanReportService {
             if (output == null) {
                 throw new IOException("无法写入" + reportTypeName + "PDF");
             }
+            String hospitalName = MaintenanceSettings.getHospitalName(context);
             drawReportPage(
                     document,
                     barcode,
@@ -345,7 +347,8 @@ public final class RedBloodCellLifespanReportService {
                     diagnosis,
                     reportTypeName,
                     reportTitle,
-                    reportFooter);
+                    reportFooter,
+                    hospitalName);
             document.writeTo(output);
             success = true;
         } finally {
@@ -385,12 +388,15 @@ public final class RedBloodCellLifespanReportService {
             String diagnosis,
             String reportTypeName,
             String reportTitle,
-            String reportFooter) {
+            String reportFooter,
+            String hospitalName) {
         PdfDocument.Page page = document.startPage(
                 new PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create());
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
 
+        ReportHospitalHeader.draw(
+                canvas, hospitalName, PAGE_MARGIN, PAGE_WIDTH - PAGE_MARGIN);
         drawReportHeader(canvas, paint, report, reportTitle);
         float y = drawSectionTitle(canvas, paint, 100f, "第一部分  患者信息");
         y = drawPatientGrid(

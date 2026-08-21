@@ -7,6 +7,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -24,6 +25,7 @@ public class MainActivity extends AppCompatActivity {
     private static final int MAX_CONNECT_RETRY = 5;
 
     private ProgressBar bootProgressBar;
+    private TextView textHospitalName;
     private CardView cardDetect, cardReport, cardHelp;
 
     private UsbSerialHelper usbHelper;
@@ -44,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
 
     private void initViews() {
         bootProgressBar = findViewById(R.id.bootProgressBar);
+        textHospitalName = findViewById(R.id.textHospitalName);
         cardDetect = findViewById(R.id.cardDetect);
         cardReport = findViewById(R.id.cardReport);
         cardHelp = findViewById(R.id.cardHelp);
@@ -69,6 +72,16 @@ public class MainActivity extends AppCompatActivity {
         cardHelp.setOnClickListener(v -> {
             startActivity(new Intent(MainActivity.this, HelpOperationActivity.class));
         });
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        String hospitalName = MaintenanceSettings.getHospitalName(this);
+        if (hospitalName == null || hospitalName.trim().isEmpty()) {
+            hospitalName = "未设置";
+        }
+        textHospitalName.setText("设备所在医院：" + hospitalName.trim());
     }
 
     private void initUsbSerial() {

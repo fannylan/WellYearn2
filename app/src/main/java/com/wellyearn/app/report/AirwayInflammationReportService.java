@@ -15,6 +15,7 @@ import android.os.Environment;
 import android.provider.MediaStore;
 
 import com.wellyearn.app.AirwayInflammationDiagnosisRules;
+import com.wellyearn.app.MaintenanceSettings;
 import com.wellyearn.app.database.AppDatabase;
 import com.wellyearn.app.database.entity.Patient;
 import com.wellyearn.app.database.entity.TestReport;
@@ -234,6 +235,7 @@ public final class AirwayInflammationReportService {
             if (output == null) {
                 throw new IOException("无法写入呼吸道炎症诊断报告PDF");
             }
+            String hospitalName = MaintenanceSettings.getHospitalName(context);
             drawReportPage(
                     document,
                     barcode,
@@ -244,7 +246,8 @@ public final class AirwayInflammationReportService {
                     noConcentration,
                     riskLevel,
                     riskLabel,
-                    diagnosis);
+                    diagnosis,
+                    hospitalName);
             document.writeTo(output);
             success = true;
         } finally {
@@ -278,12 +281,15 @@ public final class AirwayInflammationReportService {
             float noConcentration,
             AirwayInflammationDiagnosisRules.RiskLevel riskLevel,
             String riskLabel,
-            String diagnosis) {
+            String diagnosis,
+            String hospitalName) {
         PdfDocument.Page page = document.startPage(
                 new PdfDocument.PageInfo.Builder(PAGE_WIDTH, PAGE_HEIGHT, 1).create());
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
 
+        ReportHospitalHeader.draw(
+                canvas, hospitalName, PAGE_MARGIN, PAGE_WIDTH - PAGE_MARGIN);
         drawReportHeader(canvas, paint, report);
         float y = drawSectionTitle(canvas, paint, 100f, "第一部分  患者信息");
         y = drawPatientGrid(

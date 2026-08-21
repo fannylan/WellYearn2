@@ -14,6 +14,7 @@ import android.os.Environment;
 import android.provider.MediaStore;
 
 import com.wellyearn.app.AirwayInflammationDiagnosisRules;
+import com.wellyearn.app.MaintenanceSettings;
 import com.wellyearn.app.database.AppDatabase;
 import com.wellyearn.app.database.entity.Patient;
 import com.wellyearn.app.database.entity.TestReport;
@@ -277,6 +278,7 @@ public final class PhysicalExamReportService {
         PdfDocument document = new PdfDocument();
         try (OutputStream output = resolver.openOutputStream(uri, "w")) {
             if (output == null) throw new IOException("无法写入体检诊断报告PDF");
+            String hospitalName = MaintenanceSettings.getHospitalName(context);
             int pageNumber = 1;
             drawSummaryPage(
                     document,
@@ -286,15 +288,17 @@ public final class PhysicalExamReportService {
                     report,
                     gastrointestinal,
                     redBloodCell,
-                    respiratory);
+                    respiratory,
+                    hospitalName);
             if (gastrointestinal != null) {
-                drawGastrointestinalPage(document, pageNumber++, gastrointestinal);
+                drawGastrointestinalPage(
+                        document, pageNumber++, gastrointestinal, hospitalName);
             }
             if (redBloodCell != null) {
-                drawRedBloodCellPage(document, pageNumber++, redBloodCell);
+                drawRedBloodCellPage(document, pageNumber++, redBloodCell, hospitalName);
             }
             if (respiratory != null) {
-                drawRespiratoryPage(document, pageNumber, respiratory);
+                drawRespiratoryPage(document, pageNumber, respiratory, hospitalName);
             }
             document.writeTo(output);
             success = true;
@@ -324,10 +328,13 @@ public final class PhysicalExamReportService {
             TestReport report,
             GastrointestinalSection gastrointestinal,
             RedBloodCellSection redBloodCell,
-            RespiratorySection respiratory) {
+            RespiratorySection respiratory,
+            String hospitalName) {
         PdfDocument.Page page = startPage(document, pageNumber);
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
+        ReportHospitalHeader.draw(
+                canvas, hospitalName, PAGE_MARGIN, PAGE_WIDTH - PAGE_MARGIN);
         drawHeader(canvas, paint, report, "体检诊断报告");
 
         float y = drawSectionTitle(canvas, paint, 100f, "第一部分  患者信息");
@@ -364,10 +371,13 @@ public final class PhysicalExamReportService {
     private static void drawGastrointestinalPage(
             PdfDocument document,
             int pageNumber,
-            GastrointestinalSection section) {
+            GastrointestinalSection section,
+            String hospitalName) {
         PdfDocument.Page page = startPage(document, pageNumber);
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
+        ReportHospitalHeader.draw(
+                canvas, hospitalName, PAGE_MARGIN, PAGE_WIDTH - PAGE_MARGIN);
         drawSimpleHeader(canvas, paint, "检测数据 - 胃肠道疾病检测");
         String gases = (section.selectedH2 ? "H2" : "")
                 + (section.selectedH2 && section.selectedCH4 ? "、" : "")
@@ -403,10 +413,13 @@ public final class PhysicalExamReportService {
     private static void drawRedBloodCellPage(
             PdfDocument document,
             int pageNumber,
-            RedBloodCellSection section) {
+            RedBloodCellSection section,
+            String hospitalName) {
         PdfDocument.Page page = startPage(document, pageNumber);
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
+        ReportHospitalHeader.draw(
+                canvas, hospitalName, PAGE_MARGIN, PAGE_WIDTH - PAGE_MARGIN);
         drawSimpleHeader(canvas, paint, "检测数据 - 红细胞寿命检测");
         float y = drawSectionTitle(canvas, paint, 95f, "检测数据");
         String[][] rows = {
@@ -436,10 +449,13 @@ public final class PhysicalExamReportService {
     private static void drawRespiratoryPage(
             PdfDocument document,
             int pageNumber,
-            RespiratorySection section) {
+            RespiratorySection section,
+            String hospitalName) {
         PdfDocument.Page page = startPage(document, pageNumber);
         Canvas canvas = page.getCanvas();
         Paint paint = basePaint();
+        ReportHospitalHeader.draw(
+                canvas, hospitalName, PAGE_MARGIN, PAGE_WIDTH - PAGE_MARGIN);
         drawSimpleHeader(canvas, paint, "检测数据 - 呼吸道炎症检测");
         float y = drawSectionTitle(canvas, paint, 95f, "检测数据");
         String[][] rows = {
